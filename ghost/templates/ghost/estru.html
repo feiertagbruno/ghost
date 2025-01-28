@@ -1,0 +1,28 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="{% static 'ghost/css/main.css' %}">
+	<link rel="stylesheet" href="{% static 'ghost/css/generic.css' %}">
+	<link rel="stylesheet" href="{% static 'ghost/css/multiestruturas.css' %}">
+	<link rel="stylesheet" href="{% static 'ghost/css/messages.css' %}">
+	<title>FlyGama</title>
+</head>
+<body class="jost">
+	
+	<div class="header-div">
+		{% include "ghost/logo_ghost.html" %}
+		{% if request.path != "/" %}
+		<div class="a-home">
+			<a href="{% url "ghost:home" %}"><u>home</u></a>
+		</div>
+		{% endif %}
+	</div>
+	<div class="linha-logo"></div>
+	{% include "ghost/messages.html" %}
+	{% block content %}{% endblock content %}	
+</body>
+</html>

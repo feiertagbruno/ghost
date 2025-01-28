@@ -1,0 +1,62 @@
+{% extends "ghost/estru.html" %}
+{% load custom_filters %}
+{% load static %}
+
+{% block content %}
+<div class="multiestruturas">
+	<table>
+		<thead>
+			<tr>
+				<th>Código</th>
+				<th>Descrição</th>
+				<th>Data de Referência</th>
+				<th>Total Últimas Compras</th>
+				<th>Total Último Fechamento</th>
+				<th>Total Custo Médio</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for row in custos_totais %}
+			<tr>
+				<td>{{row.codigo_original}}</td>
+				<td>{{row.descricao}}</td>
+				<td>{{row.data_referencia}}</td>
+
+				{% with indice=forloop.counter|calcular_id:2 %}
+				<td id="{{indice}}" class="abrir-detalhamento">{{row.custo_total_ultima_compra}}</td>
+				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
+					<div class="detalhamento-titulo">Detalhamento</div>
+					{{row.comentario_ultima_compra}}
+					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
+				</div>
+				{% endwith %}
+
+				{% with indice=forloop.counter|calcular_id:1 %}
+				<td id="{{indice}}" class="abrir-detalhamento">{{row.custo_total_ultimo_fechamento}}</td>
+				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
+					<div class="detalhamento-titulo">Detalhamento</div>
+					{{row.comentario_ultimo_fechamento}}
+					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
+				</div>
+				{% endwith %}
+
+				{% with indice=forloop.counter|calcular_id:0 %}
+				<td id="{{indice}}" class="abrir-detalhamento">{{row.total_pelo_custo_medio}}</td>
+				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
+					<div class="detalhamento-titulo">Detalhamento</div>
+					{{row.comentario_custo_medio}}
+				</div>
+				<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
+				{% endwith %}
+
+				{% comment %} <td>{{row.custo_total_ultimo_fechamento}}</td>
+				<td>{{row.total_pelo_custo_medio}}</td> {% endcomment %}
+				
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+<script>document.body.classList.add("movimenta-background-direita")</script>
+<script src="{% static 'ghost/js/multiestruturas.js' %}"></script>
+{% endblock content %}

@@ -1,0 +1,27 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block content %}
+
+<form class="form form-multi-estruturas" method="post" action="{% url "ghost:multiestruturas" %}">
+	{% csrf_token %}
+	<span class="titulo-form">Multi Estruturas</span>
+	<div class="flex-flow-row linha-form">
+		<label for="data-referencia-id">Data de Referência: </label>
+		<input type="date" name="data-referencia" id="data-referencia-id" value="{{data_referencia}}"></input>
+	</div>
+	<div class="flex-flow-row linha-form">
+		<label for="codigos-produtos-id">Códigos dos Produtos: </label>
+		<textarea class="codigos-produtos" name="codigos-produtos" id="codigos-produtos-id"></textarea>
+	</div>
+	<button class="botao-padrao" type="submit">Iniciar</button>
+</form>
+<script>
+  const textarea = document.getElementById('codigos-produtos-id');
+
+  textarea.addEventListener('input', () => {
+    textarea.style.height = 'auto';
+    textarea.style.height = (textarea.scrollHeight) + 'px';
+  });
+</script>
+{% endblock content %}

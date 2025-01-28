@@ -1,0 +1,18 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+{% block content %}
+
+	<div class="aplicacoes-titulo"><strong>Aplicações</strong></div>
+
+	<div class="aplicacoes-div">
+		<div class="linha-vertical"></div>
+		<ul class="aplicacoes-items">
+			<li>
+			<a class="aplicacao-item" href="{% url "ghost:ghost" %}">
+				<strong>Ghost</strong> - análise de BOM x OP
+			</a>
+			</li>
+		</ul>
+	</div>
+	<script>document.body.classList.add("zoom-background-home")</script>
+	{% endblock content %}
