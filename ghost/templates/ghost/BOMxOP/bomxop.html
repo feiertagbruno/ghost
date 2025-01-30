@@ -1,0 +1,30 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block content %}
+
+	<form action="{% url "ghost:bomxop-post" %}" class="form form-bomxop" method="post">
+		<span class="titulo-form borda-dupla-inferior">BOM x OP</span>
+		
+		{% csrf_token %}
+
+		<div class="flex-flow-row">
+			<label for="numero-op-id">Número da OP: </label>
+			<input type="text" name="numero-op" id="numero-op-id" maxlength="11">
+		</div>
+
+		<div class="flex-flow-row">
+			<label for="data-inicial-id">Data Inicial: </label>
+			<input class="data-multiestrutura" type="date" name="data-inicial" id="data-inicial-id">
+
+			<label for="data-final-id">Data Final: </label>
+			<input class="data-multiestrutura" type="date" name="data-final" id="data-final-id">
+
+		</div>
+
+		<button class="botao-padrao" type="submit">Buscar</button>
+
+	</form>
+
+	<script src="{% static 'ghost/js/bomxop.js' %}"></script>
+{% endblock content %}

@@ -5,7 +5,7 @@
 
 <form class="form form-multi-estruturas" method="post" action="{% url "ghost:multiestruturas" %}">
 	{% csrf_token %}
-	<span class="titulo-form">Multi Estruturas</span>
+	<span class="titulo-form borda-dupla-inferior">Multiestruturas</span>
 	<div class="flex-flow-row linha-form">
 		<label for="data-referencia-id">Data de Referência: </label>
 		<input type="date" name="data-referencia" id="data-referencia-id" value="{{data_referencia}}"></input>

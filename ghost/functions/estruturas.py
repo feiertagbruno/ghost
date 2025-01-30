@@ -1,13 +1,15 @@
 from dotenv import load_dotenv
-from os import environ, startfile
+from os import environ, path
 from sqlalchemy import create_engine, text
 from datetime import datetime
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.comments import Comment
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.styles import NamedStyle
+from openpyxl.utils import get_column_letter
 from ghost.queries import *
+from django.conf import settings
+from django.contrib import messages
 
 
 
@@ -67,8 +69,13 @@ def forma_string_codigos(codigos):
 
 
 
-def acrescenta_alternativos(estrutura: pd.DataFrame, engine):
-	codigos_filhos = estrutura[estrutura["tipo_insumo"] != "PI"][["insumo"]].reset_index(drop=True)
+def acrescenta_alternativos(estrutura: pd.DataFrame, engine, abre_todos_os_PIs = True):
+	if not abre_todos_os_PIs:
+		codigos_filhos = estrutura[(estrutura["tipo_insumo"] != "PI") | (
+			(estrutura["tipo_insumo"] == "PI") & (estrutura["fantasma"] != "S")
+		)][["insumo"]].reset_index(drop=True)
+	else:
+		codigos_filhos = estrutura[estrutura["tipo_insumo"] != "PI"][["insumo"]].reset_index(drop=True)
 	todos_os_codigos = codigos_filhos.copy(deep=True).rename(columns={"insumo":"todos_os_codigos"})
 
 	str_codigos = forma_string_codigos(codigos_filhos["insumo"])
@@ -107,7 +114,7 @@ def busca_custos_ultima_compra(str_codigos, data_referencia, engine):
 
 
 
-def explode_extrutura(codigo, data_referencia = None, engine = None):
+def explode_extrutura(codigo, data_referencia = None, engine = None, abre_todos_os_PIs = True):
 
 	data_referencia = tratamento_data_referencia(data_referencia)
 	
@@ -118,7 +125,10 @@ def explode_extrutura(codigo, data_referencia = None, engine = None):
 	resultado = get_estrutura_produto(codigo, data_referencia, engine)
 	estrutura = resultado.copy(deep=True)
 
-	filtro_PI = resultado[resultado["tipo_insumo"] == "PI"]
+	if not abre_todos_os_PIs:
+		filtro_PI = resultado[(resultado["tipo_insumo"] == "PI") & (resultado["fantasma"] == "S")]
+	else:
+		filtro_PI = resultado[resultado["tipo_insumo"] == "PI"]
 	tem_PI = True if not filtro_PI.empty else False
 
 	#enquanto tiver PI continua executando a consulta no banco
@@ -129,7 +139,10 @@ def explode_extrutura(codigo, data_referencia = None, engine = None):
 			estrutura.loc[estrutura["insumo"] == codigo_PI, "verificado"] = True
 			estrutura = pd.concat([estrutura,resultado],ignore_index=True)
 
-		filtro_PI = estrutura[(estrutura["verificado"].isnull()) & (estrutura["tipo_insumo"] == "PI")]
+		if not abre_todos_os_PIs:
+			filtro_PI = resultado[(resultado["tipo_insumo"] == "PI") & (resultado["fantasma"] == "S")]
+		else:
+			filtro_PI = resultado[resultado["tipo_insumo"] == "PI"]
 		tem_PI = True if not filtro_PI.empty else False
 
 	resultado = None
@@ -139,7 +152,7 @@ def explode_extrutura(codigo, data_referencia = None, engine = None):
 	estrutura["quant_utilizada"] = estrutura.groupby("insumo")["quant_utilizada"].transform("sum")
 	estrutura.drop_duplicates(subset="insumo", inplace=True)
 	
-	estrutura, todos_os_codigos = acrescenta_alternativos(estrutura, engine)
+	estrutura, todos_os_codigos = acrescenta_alternativos(estrutura, engine, abre_todos_os_PIs)
 
 	return estrutura, todos_os_codigos
 
@@ -198,23 +211,23 @@ def traz_custos_por_produto(estrutura, consulta_custos, tupla_nomes_colunas):
 
 
 
-def calcula_custo_total(codigo, descricao, data_referencia, estrutura:pd.DataFrame, nomes_colunas, custos_totais_produto = pd.DataFrame()):
+def calcula_custo_total(codigo, descricao, data_referencia_var, estrutura:pd.DataFrame, nomes_colunas, custos_totais_produto = pd.DataFrame()):
 	coluna_custos_estrutura, coluna_custos_alternativos, nova_coluna_custo_total, nova_coluna_comentario = nomes_colunas
 	
 	if custos_totais_produto.empty:
 		custos_totais_produto = pd.DataFrame([{
 			"codigo_original": codigo,
-			"descricao": descricao,
-			"data_referencia": data_referencia,
+			"descricao_cod_original": descricao,
+			"data_referencia": pd.to_datetime(data_referencia_var, format="%d/%m/%Y"),
 			nova_coluna_custo_total: None,
 			nova_coluna_comentario: None,
 		}])
 	elif custos_totais_produto[custos_totais_produto["codigo_original"] == codigo].empty:
 		custos_totais_produto.loc[len(custos_totais_produto)] = [
-			codigo, estrutura.loc[estrutura["codigo_pai"] == codigo, "descricao_pai"].values[0], data_referencia
+			codigo, descricao, data_referencia_var
 		]
 
-	comentario = f"{codigo}\nData Referência: {datetime.strftime(data_referencia,'%d/%m/%Y')}\n\n"
+	comentario = f"{codigo}\nData Referência: {datetime.strftime(data_referencia_var,'%d/%m/%Y')}\n\n"
 	#calculo dos originais (os únicos no caso de OPs)
 	estrutura_codigos_originais = estrutura[
 		(estrutura[coluna_custos_estrutura].notnull()) & (estrutura[coluna_custos_estrutura] != 0)
@@ -222,7 +235,7 @@ def calcula_custo_total(codigo, descricao, data_referencia, estrutura:pd.DataFra
 
 	total = estrutura_codigos_originais[coluna_custos_estrutura].sum()
 	comentario += estrutura_codigos_originais[["insumo","descricao_insumo",coluna_custos_estrutura]].agg(
-		lambda x: f"Ori - {x['insumo']} - {x['descricao_insumo']}: R$ {str(round(x[coluna_custos_estrutura],5)).replace('.',',')}"
+		lambda x: f"Ori - {x['insumo']} - {x['descricao_insumo']} - R$ {str(round(x[coluna_custos_estrutura],5)).replace('.',',')}"
 		,axis=1
 	).str.cat(sep="\n")
 
@@ -281,23 +294,35 @@ def busca_custos_medios(str_codigos, data_referencia, engine):
 
 
 
-def estrutura_simples(codigo, data_referencia):
 
-	engine = get_engine()
+def get_descricao_produto(codigo, engine = None):
+	return pd.read_sql(
+			text(get_query_busca_descricao_produto()),
+			engine, params={"codigo":codigo}
+		)["descricao"].values[0]
+
+
+
+
+def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs = True):
+
+	if not engine:
+		engine = get_engine()
 	data_referencia = tratamento_data_referencia(data_referencia)
 
-	estrutura, todos_os_codigos = explode_extrutura(codigo, data_referencia, engine)
-	estrutura = estrutura[estrutura["tipo_insumo"] != "PI"]
+	estrutura, todos_os_codigos = explode_extrutura(codigo, data_referencia, engine, abre_todos_os_PIs)
+
+	if not abre_todos_os_PIs:
+		estrutura = estrutura[(estrutura["tipo_insumo"] != "PI") | ((estrutura["tipo_insumo"] == "PI") & (estrutura["fantasma"] != "S"))]
+	else:
+		estrutura = estrutura[estrutura["tipo_insumo"] != "PI"]
 
 	str_codigos = forma_string_codigos(todos_os_codigos["todos_os_codigos"])
 
 	try:
 		descricao = estrutura.loc[estrutura["codigo_pai"] == codigo, "descricao_pai"].values[0]
 	except:
-		descricao = pd.read_sql(
-			text("SELECT TOP 1 TRIM(B1_DESC) descricao FROM VW_MN_SB1 B1 WHERE B1.D_E_L_E_T_ <> '*' AND B1_COD = :codigo"),
-			engine, params={"codigo":codigo}
-		)["descricao"].values[0]
+		descricao = get_descricao_produto(codigo, engine)
 
 	custos_ultima_compra = busca_custos_ultima_compra(str_codigos, data_referencia, engine)
 	estrutura = traz_custos_por_produto(estrutura, custos_ultima_compra, ("ult_compra_custo_utilizado","comentario_ultima_compra"))
@@ -315,26 +340,69 @@ def estrutura_simples(codigo, data_referencia):
 	custos_totais_produto = calcula_custo_total(codigo, descricao, data_referencia, estrutura, 
 		["medio_atual_custo_utilizado","medio_atual_custo_utilizado_alt","total_pelo_custo_medio", "comentario_custo_medio"],
 		custos_totais_produto)
+	
+	estrutura["codigo_original"] = str(codigo)
+	estrutura["descricao_cod_original"] = str(descricao)
 
 	return estrutura, custos_totais_produto
 	
+def gerar_relatorio_excel_estruturas_simples(estrutura, custos_totais_produtos, data_referencia):
+
+	data_referencia = tratamento_data_referencia(data_referencia)
+
+	max_lengths = {}
+	for col in estrutura.columns:
+		max_length = max(estrutura[col].apply(lambda x: len(str(x))).max(), len(str(col))) 
+		max_lengths[col] = max_length
+
+	nomes_das_colunas = {
+		'codigo_original':"Cód Original",
+		'descricao_cod_original':"Desc Orig",
+		'codigo_pai':"Código Pai", 
+		'descricao_pai':"Desc Pai", 
+		'tipo_pai':"Tipo Pai", 
+		'insumo':"Insumo", 
+		'descricao_insumo':"Descrição Insumo",
+		'quant_utilizada':"Quant Utilizada", 
+		'tipo_insumo':"Tipo Insumo", 
+		'origem':"Origem", 
+		'alternativos':"Alternativos", 
+		'ult_compra_custo_utilizado':"Últ Compra",
+		'ult_compra_custo_utilizado_alt':"Últ Compra Alt",
+		'fechamento_custo_utilizado':"Últ Fechamento",
+		'fechamento_custo_utilizado_alt':"Últ Fecham Alt",
+		'medio_atual_custo_utilizado':"Médio Atual",
+		'medio_atual_custo_utilizado_alt':"Médio Atual Alt",
+	}
+
 	wb = Workbook()
 	ws = wb.active
 	ws.title = "Detalhamento"
 
 	ws.append([
-		"Cód Original","Desc Orig","Código Pai", "Desc Pai", # 1, 2, 3, 4
-		"Tipo Pai", "Insumo", "Descrição Insumo", "Quant Utilizada", # 5, 6, 7, 8
-		"Tipo Insumo", "Origem", "Alternativos", # 9, 10, 11
-		"Últ Compra", "Últ Compra Alt", # 12, 13
-		"Últ Fechamento", "Últ Fecham Alt", # 14, 15
-		"Médio Atual", "Médio Atual Alt" # 16, 17
+		nomes_das_colunas["codigo_original"],
+		nomes_das_colunas["descricao_cod_original"],
+		nomes_das_colunas["codigo_pai"],
+		nomes_das_colunas["descricao_pai"],
+		nomes_das_colunas["tipo_pai"],
+		nomes_das_colunas["insumo"],
+		nomes_das_colunas["descricao_insumo"],
+		nomes_das_colunas["quant_utilizada"],
+		nomes_das_colunas["tipo_insumo"],
+		nomes_das_colunas["origem"],
+		nomes_das_colunas["alternativos"],
+		nomes_das_colunas["ult_compra_custo_utilizado"],
+		nomes_das_colunas["ult_compra_custo_utilizado_alt"],
+		nomes_das_colunas["fechamento_custo_utilizado"],
+		nomes_das_colunas["fechamento_custo_utilizado_alt"],
+		nomes_das_colunas["medio_atual_custo_utilizado"],
+		nomes_das_colunas["medio_atual_custo_utilizado_alt"],
 	])
 
 	for i, row in estrutura.iterrows():
 		l = i+2
-		ws.cell(l, 1, codigo)
-		ws.cell(l, 2, descricao)
+		ws.cell(l, 1, row["codigo_original"])
+		ws.cell(l, 2, row["descricao_cod_original"])
 		ws.cell(l, 3, row["codigo_pai"])
 		ws.cell(l, 4, row["descricao_pai"])
 		ws.cell(l, 5, row["tipo_pai"])
@@ -369,6 +437,24 @@ def estrutura_simples(codigo, data_referencia):
 		ws.cell(l,17, row["medio_atual_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
+	colunas_para_ocultar = {
+		"Desc Orig","Desc Pai","Descrição Insumo"
+	}
+
+	for col in range(1, ws.max_column + 1):
+		cabecalho = ws.cell(1,col).value
+		letra_coluna = get_column_letter(col)
+
+		if cabecalho in colunas_para_ocultar:
+			ws.column_dimensions[letra_coluna].outlineLevel = 1
+			ws.column_dimensions[letra_coluna].hidden = True
+		
+		for chave, valor in nomes_das_colunas.items():
+			if valor == cabecalho:
+				adjusted_width = max_lengths[chave] + 4
+				ws.column_dimensions[letra_coluna].width = adjusted_width
+				break
+
 	tab = Table(
 		displayName="tabela_estruturas",
 		ref=f"A1:Q{len(estrutura) + 1}"
@@ -386,13 +472,11 @@ def estrutura_simples(codigo, data_referencia):
 	ws2 = wb.create_sheet("Consolidado",0)
 	ws2.append(["Data de Referência", "Código","Descrição","Últimas Entradas","Último Fechamento","Custo Médio"])
 
-	formato_data = NamedStyle(name="ddmmyyyy",number_format="DD/MM/YYYY")
-
-	for i, row in custos_totais_produto.iterrows():
+	for i, row in custos_totais_produtos.iterrows():
 		l = i+2
-		ws2.cell(l, 1, data_referencia).style = formato_data
-		ws2.cell(l, 2, codigo)
-		ws2.cell(l, 3, descricao)
+		ws2.cell(l, 1, data_referencia).number_format = "DD/MM/YYYY"
+		ws2.cell(l, 2, row["codigo_original"])
+		ws2.cell(l, 3, row["descricao_cod_original"])
 
 		comm = row["comentario_ultima_compra"]
 		ws2.cell(l, 4, row["custo_total_ultima_compra"])\
@@ -408,13 +492,43 @@ def estrutura_simples(codigo, data_referencia):
 
 	tab = Table(
 		displayName="tabela_consolidada",
-		ref=f"A1:F{len(custos_totais_produto) + 1}"
+		ref=f"A1:F{len(custos_totais_produtos) + 1}"
 	)
 	tab.tableStyleInfo = style
 	ws2.add_table(tab)
 
+	caminho_arquivo = path.join(settings.MEDIA_ROOT,"Estruturas.xlsx")
 
-	wb.save(f"estruturas_{datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M')}.xlsx")
+	wb.save(caminho_arquivo)
 
-	#startfile("relatorio.xlsx")
+	return caminho_arquivo
 
+
+
+
+def gerar_multiestruturas(
+		request, produtos, data_referencia, engine = None
+	):
+
+	if not engine:
+		engine = get_engine()
+
+	compilado_estruturas = pd.DataFrame()
+	compilado_custos_totais = pd.DataFrame()
+
+	data_referencia = tratamento_data_referencia(data_referencia)
+
+	for produto in produtos:
+		produto = produto.strip().upper()
+
+		if len(produto) == 7 or len(produto) == 15:
+			estrutura, custos_totais_produto = estrutura_simples(produto, data_referencia, engine)
+			compilado_estruturas = pd.concat([compilado_estruturas, estrutura])
+			compilado_custos_totais = pd.concat([compilado_custos_totais, custos_totais_produto])
+		else:
+			messages.info(request, f"Produto {produto} contém um erro de digitação.")
+	
+	compilado_custos_totais = compilado_custos_totais.reset_index(drop=True)
+	compilado_estruturas = compilado_estruturas.reset_index(drop=True)
+
+	return [request, compilado_estruturas, compilado_custos_totais]

@@ -2,15 +2,25 @@
 {% load static %}
 {% block content %}
 
-	<div class="aplicacoes-titulo"><strong>Aplicações</strong></div>
+	<div class="aplicacoes-titulo borda-dupla-inferior"><strong>Aplicações</strong></div>
 
 	<div class="aplicacoes-div">
 		<div class="linha-vertical"></div>
 		<ul class="aplicacoes-items">
 			<li>
-			<a class="aplicacao-item" href="{% url "ghost:ghost" %}">
-				<strong>Ghost</strong> - análise de BOM x OP
-			</a>
+				- Multiestruturas
+				<ul class="subaplicacao">
+					<li>
+							<a class="aplicacao-item" href="{% url "ghost:ghost" %}">
+							Última Entrada | Último Fechamento | Custo Médio
+						</a>
+						</li>
+						<li>
+							<a class="aplicacao-item" href="{% url "ghost:bomxop" %}">
+							BOM x OP
+						</a> 
+						</li>
+				</ul>
 			</li>
 		</ul>
 	</div>
