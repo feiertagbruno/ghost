@@ -3,8 +3,10 @@
 
 {% block content %}
 
-<form class="form form-multi-estruturas" method="post" action="{% url "ghost:multiestruturas" %}">
+<form id="form-multi-id" class="form form-multi-estruturas" method="post" action="{% url "ghost:multiestruturas" %}">
 	{% csrf_token %}
+	<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
+
 	<span class="titulo-form borda-dupla-inferior">Multiestruturas</span>
 	<div class="flex-flow-row linha-form">
 		<label for="data-referencia-id">Data de Referência: </label>
@@ -14,14 +16,7 @@
 		<label for="codigos-produtos-id">Códigos dos Produtos: </label>
 		<textarea class="codigos-produtos" name="codigos-produtos" id="codigos-produtos-id"></textarea>
 	</div>
-	<button class="botao-padrao" type="submit">Iniciar</button>
+	<button id="botao-multi-simples" class="botao-padrao" type="submit">Iniciar</button>
 </form>
-<script>
-  const textarea = document.getElementById('codigos-produtos-id');
-
-  textarea.addEventListener('input', () => {
-    textarea.style.height = 'auto';
-    textarea.style.height = (textarea.scrollHeight) + 'px';
-  });
-</script>
+<script src="{% static "ghost/js/multiSimples.js" %}"></script>
 {% endblock content %}

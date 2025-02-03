@@ -9,8 +9,15 @@ from django.contrib import messages
 from django.http import FileResponse
 from ghost.functions.OPs import (
 	get_info_op, combina_estrutura_e_op, combina_custos_totais_estrutura_e_op, 
-	gerar_relatorio_excel_bomxop_simples, get_numeros_OPs_por_periodo
+	gerar_relatorio_excel_bomxop_simples, get_numeros_OPs_por_periodo,
+	get_numero_op_pelo_produto
 )
+import pandas as pd
+from ghost.models import Processamento
+from django.http import JsonResponse
+import json
+
+pd.set_option("future.no_silent_downcasting", True)
 
 def home(request):
 	return render(request, "ghost/home.html")
@@ -42,11 +49,28 @@ def multiestruturas(request):
 		messages.info(request, "Sua busca retornou sem resultados")
 		return redirect(reverse("ghost:ghost"))
 	
+	processamento = Processamento.objects.filter(
+		codigo_identificador = request.POST.get("codigo-identificador","a"),
+		caller = "multiestruturas",
+		finalizado = False
+	)
+	if processamento.exists():
+		processamento_atual = processamento.first()
+		processamento_atual.porcentagem = "99%"
+		processamento_atual.mensagem1 = "Finalizando"
+		processamento_atual.mensagem2 = "Compondo relatório em Excel"
+		processamento_atual.save()
+
 	caminho_relatorio_excel = gerar_relatorio_excel_estruturas_simples(compilado_estruturas, compilado_custos_totais, data_referencia)
 
 	compilado_custos_totais["data_referencia"] = compilado_custos_totais["data_referencia"].dt.strftime("%d/%m/%Y")
 
 	custos_totais_dict = compilado_custos_totais.to_dict(orient="records")
+
+	if processamento.exists():
+		processamento_atual.porcentagem = "100%"
+		processamento_atual.finalizado = True
+		processamento_atual.save()
 
 	context = {
 		"custos_totais": custos_totais_dict,
@@ -69,18 +93,17 @@ def baixar_relatorio_multiestruturas(request):
 def bomxop(request):
 	return render(request, "ghost/BOMxOP/bomxop.html")
 
-def extrai_bomxop_pela_op(request, numero_op):
+def extrai_bomxop_pela_op(request, numero_op, engine = None):
 
-	engine = get_engine()
+	if not engine:
+		engine = get_engine()
 
 	codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(numero_op, engine)
 
 	if not codigo: return redirect(reverse("ghost:bomxop"))
 
 	estrutura, custos_totais_estrutura = estrutura_simples(codigo, data_referencia, engine, False)
-
 	estrutura_com_op = combina_estrutura_e_op(estrutura, consulta_op)
-
 	custos_totais_estrutura_op = combina_custos_totais_estrutura_e_op(custos_totais_estrutura, custos_totais_op)
 
 	caminho_relatorio_excel = gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutura_op, data_referencia)
@@ -108,7 +131,7 @@ def baixar_relatorio_bomxop_simples(request):
 		messages.error(request, "Algo saiu errado na geração do relatório.")
 		return redirect(reverse("ghost:home"))
 
-	return FileResponse(open(caminho_arquivo,"rb"),as_attachment=True, filename="BOM x OP Simples.xlsx")
+	return FileResponse(open(caminho_arquivo,"rb"),as_attachment=True, filename="BOM x OP.xlsx")
 
 
 
@@ -116,9 +139,80 @@ def baixar_relatorio_bomxop_simples(request):
 def extrai_bomxop_por_periodo(request, data_inicial, data_final):
 	
 	engine = get_engine()
-
 	OPs = get_numeros_OPs_por_periodo(data_inicial, data_final, engine)
 
+	if not OPs:
+		messages.info(request, "Não existem OPs finalizadas neste período.")
+		return redirect(reverse("ghost:bomxop"))
+
+	compilado_estrutura_com_op = pd.DataFrame()
+	compilado_custos_totais_estrutura_op = pd.DataFrame()
+
+	################ processamento
+	processamento = Processamento.objects.create(
+		codigo_identificador = request.POST.get("codigo-identificador","a"),
+		caller = "bomxop",
+		porcentagem = "0",
+		mensagem1 = "Processando",
+		mensagem2 = ""
+	)
+	################
+
+	for index, numero_op in enumerate(OPs):
+
+		################ processamento
+		processamento.porcentagem = f"{int((index+1)/len(OPs)*98)}%"
+		processamento.mensagem2 = f'Obtendo informações da OP {numero_op}'
+		processamento.save()
+		################ 
+
+		codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(numero_op, engine)
+
+		################ processamento
+		processamento.mensagem2 = f'Extraindo estrutura de {codigo}'
+		processamento.save()
+		################
+
+		estrutura, custos_totais_estrutura = estrutura_simples(codigo, data_referencia, engine, False)
+
+		################ processamento
+		processamento.mensagem2 = f'Unindo estrutura e OP'
+		processamento.save()
+		################
+		
+		estrutura_com_op = combina_estrutura_e_op(estrutura, consulta_op)
+		custos_totais_estrutura_op = combina_custos_totais_estrutura_e_op(custos_totais_estrutura, custos_totais_op)
+
+		compilado_estrutura_com_op = pd.concat([compilado_estrutura_com_op, estrutura_com_op],ignore_index=True)
+		compilado_custos_totais_estrutura_op = pd.concat([compilado_custos_totais_estrutura_op, custos_totais_estrutura_op],ignore_index=True)
+
+
+	################ processamento
+	processamento.porcentagem = "99%"
+	processamento.mensagem1 = 'Finalizando'
+	processamento.mensagem2 = 'Compondo o relatório em Excel'
+	processamento.save()
+	################
+
+	caminho_relatorio_excel = gerar_relatorio_excel_bomxop_simples(
+		compilado_estrutura_com_op, compilado_custos_totais_estrutura_op, data_referencia
+	)
+
+	compilado_custos_totais_estrutura_op["data_referencia"] = compilado_custos_totais_estrutura_op["data_referencia"].dt.strftime("%d/%m/%Y")
+
+	custos_totais_dict = compilado_custos_totais_estrutura_op.to_dict(orient="records")
+
+	context = {
+		"custos_totais": custos_totais_dict,
+		"path_xlsx": caminho_relatorio_excel,
+	}
+
+	################ processamento
+	processamento.finalizado = True
+	processamento.save()
+	################
+
+	return render(request,"ghost/BOMxOP/bomxop_post.html", context)
 
 
 
@@ -144,7 +238,49 @@ def bomxop_post(request):
 		data_inicial = tratamento_data_referencia(data_inicial)
 		data_final = tratamento_data_referencia(data_final)
 		return extrai_bomxop_por_periodo(request, data_inicial, data_final)
+	
+	produto = request.POST.get("codigo-produto")
+
+	if not produto:
+		messages.info(request, "Dados Inválidos")
+		return redirect(reverse("ghost:bomxop"))
+	
+	produto = str(produto).strip().upper()
+
+	if len(produto) != 7 and len(produto) != 15:
+		messages.info(request, "Há um erro de digitação no produto")
+		return redirect(reverse("ghost:bomxop"))
+	
+	engine = get_engine()
+	numero_op = get_numero_op_pelo_produto(produto, engine)
+	if numero_op:
+		return extrai_bomxop_pela_op(request, numero_op, engine)
+
 
 	return redirect(reverse("ghost:bomxop"))
 
-#extrai_bomxop_pela_op("","33056001001")
+
+
+
+def buscar_processamento(request):
+
+	response = {
+		"porcentagem": "",
+		"mensagem1": "Processando",
+		"mensagem2": "",
+	}
+	data = json.loads(request.body)
+
+	codigo = data.get("codigo_identificador", "a")
+	caller = data.get("caller", "a")
+
+	processamento = Processamento.objects.filter(codigo_identificador = codigo, caller = caller, finalizado = False)
+	if processamento.exists():
+		processamento = processamento.first()
+		response = {
+			"porcentagem": processamento.porcentagem,
+			"mensagem1": processamento.mensagem1,
+			"mensagem2": processamento.mensagem2,
+		}
+
+	return JsonResponse(response)

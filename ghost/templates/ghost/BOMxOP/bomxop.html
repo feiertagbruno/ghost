@@ -3,10 +3,11 @@
 
 {% block content %}
 
-	<form action="{% url "ghost:bomxop-post" %}" class="form form-bomxop" method="post">
+	<form id="form-bomxop-id" action="{% url "ghost:bomxop-post" %}" class="form form-bomxop" method="post">
 		<span class="titulo-form borda-dupla-inferior">BOM x OP</span>
 		
 		{% csrf_token %}
+		<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
 
 		<div class="flex-flow-row">
 			<label for="numero-op-id">Número da OP: </label>
@@ -22,7 +23,12 @@
 
 		</div>
 
-		<button class="botao-padrao" type="submit">Buscar</button>
+		<div class="flex-flow-row">
+			<label for="codigo-produto-id">Última OP do Produto: </label>
+			<input type="text" name="codigo-produto" id="codigo-produto-id" maxlength="15">
+		</div>
+		
+		<button id="botao-bomxop" class="botao-padrao" type="submit">Buscar</button>
 
 	</form>
 

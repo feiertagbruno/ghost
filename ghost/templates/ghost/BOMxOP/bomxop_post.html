@@ -19,10 +19,10 @@
 				<th>Descrição</th>
 				<th>Data de Referência</th>
 				<th>Últ. Compras BOM</th>
-				<th>Últ. Fecham. BOM</th>
-				<th>C. Médio Atual BOM</th>
 				<th>Últ. Compras OP</th>
+				<th>Últ. Fecham. BOM</th>
 				<th>Últ. Fecham. OP</th>
+				<th>C. Médio Atual BOM</th>
 				<th>C. Médio Atual OP</th>
 			</tr>
 		</thead>
@@ -41,12 +41,30 @@
 					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
 				</div>
 				{% endwith %}
+				
+				{% with indice=forloop.counter|calcular_id_bomxop:2 %}
+				<td id="{{indice}}" class="abrir-detalhamento">{{row.custo_total_ultima_compra_op}}</td>
+				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
+					<div class="detalhamento-titulo">Detalhamento</div>
+					{{row.comentario_ultima_compra_op}}
+					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
+				</div>
+				{% endwith %}
 
 				{% with indice=forloop.counter|calcular_id_bomxop:4 %}
 				<td id="{{indice}}" class="abrir-detalhamento">{{row.custo_total_ultimo_fechamento}}</td>
 				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
 					<div class="detalhamento-titulo">Detalhamento</div>
 					{{row.comentario_ultimo_fechamento}}
+					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
+				</div>
+				{% endwith %}
+
+				{% with indice=forloop.counter|calcular_id_bomxop:1 %}
+				<td id="{{indice}}" class="abrir-detalhamento">{{row.custo_total_ult_fechamento_op}}</td>
+				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
+					<div class="detalhamento-titulo">Detalhamento</div>
+					{{row.comentario_fechamento_op}}
 					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
 				</div>
 				{% endwith %}
@@ -60,29 +78,11 @@
 				</div>
 				{% endwith %}
 
-				{% with indice=forloop.counter|calcular_id_bomxop:2 %}
-				<td id="{{indice}}" class="abrir-detalhamento">{{row.custo_total_ultima_compra}}</td>
-				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
-					<div class="detalhamento-titulo">Detalhamento</div>
-					{{row.comentario_ultima_compra}}
-					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
-				</div>
-				{% endwith %}
-
-				{% with indice=forloop.counter|calcular_id_bomxop:1 %}
-				<td id="{{indice}}" class="abrir-detalhamento">{{row.custo_total_ultimo_fechamento}}</td>
-				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
-					<div class="detalhamento-titulo">Detalhamento</div>
-					{{row.comentario_ultimo_fechamento}}
-					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
-				</div>
-				{% endwith %}
-
 				{% with indice=forloop.counter|calcular_id_bomxop:0 %}
-				<td id="{{indice}}" class="abrir-detalhamento">{{row.total_pelo_custo_medio}}</td>
+				<td id="{{indice}}" class="abrir-detalhamento">{{row.total_pelo_custo_medio_op}}</td>
 				<div id="detalhamento-{{indice}}" class="detalhamento-custo-total hidden">
 					<div class="detalhamento-titulo">Detalhamento</div>
-					{{row.comentario_custo_medio}}
+					{{row.comentario_custo_medio_op}}
 					<div id="x-{{indice}}" class="x-fechar-detalhamento">x</div>
 				</div>
 				{% endwith %}

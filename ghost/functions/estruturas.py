@@ -10,6 +10,7 @@ from openpyxl.utils import get_column_letter
 from ghost.queries import *
 from django.conf import settings
 from django.contrib import messages
+from ghost.models import Processamento
 
 
 
@@ -135,14 +136,16 @@ def explode_extrutura(codigo, data_referencia = None, engine = None, abre_todos_
 	while tem_PI:
 		
 		for codigo_PI in filtro_PI["insumo"]:
+			if codigo_PI == 'MPBPJ0000000586':
+				a = ''
 			resultado = get_estrutura_produto(codigo_PI, data_referencia, engine)
 			estrutura.loc[estrutura["insumo"] == codigo_PI, "verificado"] = True
 			estrutura = pd.concat([estrutura,resultado],ignore_index=True)
 
 		if not abre_todos_os_PIs:
-			filtro_PI = resultado[(resultado["tipo_insumo"] == "PI") & (resultado["fantasma"] == "S")]
+			filtro_PI = estrutura[(estrutura["tipo_insumo"] == "PI") & (estrutura["fantasma"] == "S") & (estrutura["verificado"] != True)]
 		else:
-			filtro_PI = resultado[resultado["tipo_insumo"] == "PI"]
+			filtro_PI = estrutura[(estrutura["tipo_insumo"] == "PI") & (estrutura["verificado"] != True)]
 		tem_PI = True if not filtro_PI.empty else False
 
 	resultado = None
@@ -161,7 +164,8 @@ def explode_extrutura(codigo, data_referencia = None, engine = None, abre_todos_
 
 
 
-def busca_custo_e_comentario_alternativos(row, consulta_custos, coluna_custo, coluna_custo_alt, coluna_comentario, coluna_comentario_alt):
+def busca_custo_e_comentario_alternativos(
+		row, consulta_custos, coluna_custo, coluna_custo_alt, coluna_comentario, coluna_comentario_alt):
 	alternativos = row["alternativos"].split(";")
 	
 	if not alternativos[0]: 
@@ -171,7 +175,7 @@ def busca_custo_e_comentario_alternativos(row, consulta_custos, coluna_custo, co
 	})
 
 	custos_alternativos = [
-		str(consulta_custos.loc[consulta_custos["insumo"] == alt, coluna_custo].values[0] * row["quant_utilizada"] ).replace(".",",")
+		str(round(consulta_custos.loc[consulta_custos["insumo"] == alt, coluna_custo].values[0] * row["quant_utilizada"],5) ).replace(".",",")
 		for alt in alternativos if alt in consulta_custos["insumo"].values
 	]
 	comentarios_alternativos = [
@@ -233,11 +237,15 @@ def calcula_custo_total(codigo, descricao, data_referencia_var, estrutura:pd.Dat
 		(estrutura[coluna_custos_estrutura].notnull()) & (estrutura[coluna_custos_estrutura] != 0)
 	][["insumo","descricao_insumo",coluna_custos_estrutura]]
 
-	total = estrutura_codigos_originais[coluna_custos_estrutura].sum()
-	comentario += estrutura_codigos_originais[["insumo","descricao_insumo",coluna_custos_estrutura]].agg(
-		lambda x: f"Ori - {x['insumo']} - {x['descricao_insumo']} - R$ {str(round(x[coluna_custos_estrutura],5)).replace('.',',')}"
-		,axis=1
-	).str.cat(sep="\n")
+	if not estrutura_codigos_originais.empty:
+		total = estrutura_codigos_originais[coluna_custos_estrutura].sum()
+		comentario += estrutura_codigos_originais[["insumo","descricao_insumo",coluna_custos_estrutura]].agg(
+			lambda x: f"Ori - {x['insumo']} - {x['descricao_insumo']} - R$ {str(round(x[coluna_custos_estrutura],5)).replace('.',',')}"
+			,axis=1
+		).str.cat(sep="\n")
+	else:
+		total = 0
+		comentario += ""
 
 	produtos_nao_encontrados = estrutura[
 		(estrutura[coluna_custos_estrutura].isnull()) | (estrutura[coluna_custos_estrutura] == 0)
@@ -518,8 +526,24 @@ def gerar_multiestruturas(
 
 	data_referencia = tratamento_data_referencia(data_referencia)
 
-	for produto in produtos:
+	################ processamento
+	processamento = Processamento.objects.create(
+		codigo_identificador = request.POST.get("codigo-identificador","a"),
+		caller = "multiestruturas",
+		porcentagem = "",
+		mensagem1 = "Processando",
+		mensagem2 = ""
+	)
+	################
+
+	for index, produto in enumerate(produtos):
 		produto = produto.strip().upper()
+
+		################ processamento
+		processamento.porcentagem = f'{int((index+1)/len(produtos)*98)}%'
+		processamento.mensagem2 = f'Extraindo estrutura de {produto}'
+		processamento.save()
+		################
 
 		if len(produto) == 7 or len(produto) == 15:
 			estrutura, custos_totais_produto = estrutura_simples(produto, data_referencia, engine)

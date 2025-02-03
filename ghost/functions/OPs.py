@@ -4,7 +4,9 @@ from ghost.functions.estruturas import (
 	busca_custos_ultima_compra, busca_custos_ultimo_fechamento, busca_custos_medios,
 	traz_custos_por_produto, calcula_custo_total, get_descricao_produto
 )
-from ghost.queries import get_query_detalhamento_op
+from ghost.queries import (
+	get_query_detalhamento_op,get_query_numeros_op_por_periodo, get_query_busca_op_pelo_produto
+)
 import pandas as pd
 from sqlalchemy import text
 from openpyxl import Workbook
@@ -52,6 +54,7 @@ def get_info_op(numero_op, engine = None):
 		custos_totais_op
 	)
 
+	custos_totais_op["op"] = numero_op
 
 	return [codigo, data_referencia, resultado, custos_totais_op]
 
@@ -185,6 +188,13 @@ def combina_estrutura_e_op(estrutura:pd.DataFrame, consulta_op:pd.DataFrame):
 	})
 
 	estrutura = pd.concat([estrutura, produtos_nao_utilizados],ignore_index=True).fillna("")
+
+	numero_op = consulta_op.loc[consulta_op["op"].notnull(),"op"].values[0]
+	estrutura["op"] = numero_op
+
+	descricao_original = estrutura.loc[estrutura["descricao_cod_original"].notnull(),"descricao_cod_original"].values[0]
+	estrutura["descricao_cod_original"] = descricao_original
+
 	#estrutura.to_excel("estrutura.xlsx", "relatorio", engine="openpyxl")
 	return estrutura
 
@@ -281,10 +291,13 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 		nomes_das_colunas["alternativos"],
 		nomes_das_colunas["ult_compra_custo_utilizado"],
 		nomes_das_colunas["ult_compra_custo_utilizado_alt"],
+		# "U Compra BOM TabDin",
 		nomes_das_colunas["fechamento_custo_utilizado"],
 		nomes_das_colunas["fechamento_custo_utilizado_alt"],
+		# "U Fech BOM TabDin",
 		nomes_das_colunas["medio_atual_custo_utilizado"],
 		nomes_das_colunas["medio_atual_custo_utilizado_alt"],
+		# "C Medio BOM TabDin",
 		nomes_das_colunas["op"],
 		nomes_das_colunas["insumo_op"],
 		nomes_das_colunas["descricao_insumo_op"],
@@ -319,7 +332,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 		comm = row["comentario_ultima_compra_alt"]
 		ws.cell(l,13, row["ult_compra_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
-		
+
 		comm = row["comentario_fechamento"]
 		ws.cell(l,14, row["fechamento_custo_utilizado"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
@@ -358,6 +371,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 		ws.cell(l,27, row["emissao_op"]).number_format = "DD/MM/YYYY"
 		ws.cell(l,28, row["fechamento_op"]).number_format = "DD/MM/YYYY"
 
+
 	colunas_para_ocultar = {
 		"Descrição Orig","Descrição Pai","Descrição Insumo BOM", "Descrição Insumo OP"
 	}
@@ -376,9 +390,10 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 				ws.column_dimensions[letra_coluna].width = adjusted_width
 				break
 
+	ult_coluna = get_column_letter(ws.max_column)
 	tab = Table(
 		displayName="tabela_estruturas",
-		ref=f"A1:AB{len(estrutura_com_op) + 1}"
+		ref=f"A1:{ult_coluna}{len(estrutura_com_op) + 1}"
 	)
 	style = TableStyleInfo(
 		name="TableStyleMedium2",
@@ -390,51 +405,60 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 	tab.tableStyleInfo = style
 	ws.add_table(tab)
 
+	##### CUSTOS_TOTAIS
 	ws2 = wb.create_sheet("Consolidado",0)
 	ws2.append([
+		"OP",
 		"Data de Referência", "Código","Descrição",
-		"U Entradas BOM","U Fechamento BOM","Custo Médio BOM",
-		"U Entradas OP","U Fechamento OP","Custo Médio OP"
+		"U Entradas BOM",
+		"U Entradas OP",
+		"U Fechamento BOM",
+		"U Fechamento OP",
+		"Custo Médio BOM",
+		"Custo Médio OP"
 	])
 
 	for i, row in custos_totais_estrutura_op.iterrows():
 		l = i+2
-		ws2.cell(l, 1, data_referencia).number_format = "DD/MM/YYYY"
-		ws2.cell(l, 2, row["codigo_original"])
-		ws2.cell(l, 3, row["descricao_cod_original"])
+		ws2.cell(l, 1, row["op"])
+		ws2.cell(l, 2, data_referencia).number_format = "DD/MM/YYYY"
+		ws2.cell(l, 3, row["codigo_original"])
+		ws2.cell(l, 4, row["descricao_cod_original"])
 
 		comm = row["comentario_ultima_compra"]
-		ws2.cell(l, 4, row["custo_total_ultima_compra"])\
-			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
-
-		comm = row["comentario_ultimo_fechamento"]
-		ws2.cell(l, 5, row["custo_total_ultimo_fechamento"])\
-			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
-
-		comm = row["comentario_custo_medio"]
-		ws2.cell(l, 6, row["total_pelo_custo_medio"])\
+		ws2.cell(l, 5, row["custo_total_ultima_compra"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
 		comm = row["comentario_ultima_compra_op"]
-		ws2.cell(l, 7, row["custo_total_ultima_compra"])\
+		ws2.cell(l, 6, row["custo_total_ultima_compra_op"])\
+			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
+
+		comm = row["comentario_ultimo_fechamento"]
+		ws2.cell(l, 7, row["custo_total_ultimo_fechamento"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
 		comm = row["comentario_fechamento_op"]
-		ws2.cell(l, 8, row["custo_total_ultimo_fechamento"])\
+		ws2.cell(l, 8, row["custo_total_ult_fechamento_op"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
-		comm = row["comentario_custo_medio_op"]
+		comm = row["comentario_custo_medio"]
 		ws2.cell(l, 9, row["total_pelo_custo_medio"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
+		comm = row["comentario_custo_medio_op"]
+		ws2.cell(l, 10, row["total_pelo_custo_medio_op"])\
+			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
+
+	ult_coluna = get_column_letter(ws2.max_column)
+
 	tab = Table(
 		displayName="tabela_consolidada",
-		ref=f"A1:I{len(custos_totais_estrutura_op) + 1}"
+		ref=f"A1:{ult_coluna}{len(custos_totais_estrutura_op) + 1}"
 	)
 	tab.tableStyleInfo = style
 	ws2.add_table(tab)
 
-	caminho_arquivo = path.join(settings.MEDIA_ROOT,"BOM x OP Simples.xlsx")
+	caminho_arquivo = path.join(settings.MEDIA_ROOT,"BOM x OP.xlsx")
 
 	wb.save(caminho_arquivo)
 
@@ -446,10 +470,20 @@ def get_numeros_OPs_por_periodo(data_inicial, data_final, engine = None):
 	if not engine:
 		engine = get_engine()
 
-	query = get_numeros_OPs_por_periodo
+	query = get_query_numeros_op_por_periodo()
 	resultado = pd.read_sql(text(query), engine, params={
 		"data_inicial": data_inicial,
 		"data_final": data_final,
 	})
 
 	return resultado["op"].to_list()
+
+def get_numero_op_pelo_produto(produto, engine = None):
+
+	if not engine:
+		engine = get_engine()
+	
+	query = get_query_busca_op_pelo_produto()
+	resultado = pd.read_sql(text(query), engine, params={"produto": produto})
+	numero_op = str(resultado["op"].values[0])
+	return numero_op
