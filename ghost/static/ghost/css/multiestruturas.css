@@ -1,0 +1,55 @@
+.multiestruturas {
+	width: 80vw;
+	place-self: center;
+	overflow-x: auto;
+	margin-bottom: 3rem;
+}
+
+.detalhamento-titulo {
+	text-align: center;
+	font-size: 2.5rem;
+}
+
+.detalhamento-custo-total {
+	font-size: 1.5rem;
+	position: fixed;
+	width: 60vw;
+	height: 90vh;
+	background: wheat;
+	place-self: center;
+	overflow-y: auto;
+	white-space: pre-line;
+	top:50%;
+	left:50%;
+	transform: translate(-50%,-50%);
+	padding: 1rem;
+}
+
+.x-fechar-detalhamento {
+	position: absolute;
+	padding: 0 2rem;
+	font-size: 3.5rem;
+	right: 0;
+	top: 0;
+}
+
+.x-fechar-detalhamento:hover {
+	cursor: pointer;
+}
+
+.abrir-detalhamento:hover {
+	cursor: pointer;
+}
+
+.form-relatorio-multiestruturas {
+	display: flex;
+	padding: 0.5rem;
+	justify-content: right;
+
+}
+
+.titulo-bomxop {
+	width: 80vw;
+	place-self: center;
+	margin-top: 1rem;
+}

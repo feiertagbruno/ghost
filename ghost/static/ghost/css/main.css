@@ -1,0 +1,224 @@
+* {
+	margin: 0;
+	padding: 0;
+}
+
+@font-face {
+	font-family: "Jost";
+	src: url("../fonts/Jost-Regular.ttf") format("truetype");
+}
+
+html {
+	font-size: 62.5%;
+}
+
+.jost {
+	font-family: "Jost", sans-serif;
+	font-weight: 400;
+	font-style: normal;
+	color: rgba(0, 0, 24, 0.85);
+	margin: 0;
+	padding: 0;
+}
+
+
+body {
+	font-size: 1.5rem;
+	overflow: hidden auto;
+  background: antiquewhite;
+	min-height: 100vh;
+	background-image: url("../svg/pattern-randomized.svg");
+	background-repeat: no-repeat;
+	background-size: 180%;
+	background-attachment: fixed;
+	background-position: center;
+}
+
+a {
+	text-decoration: none;
+	color: inherit;
+}
+
+input[type="text"],
+textarea,
+input[type="date"],
+input[type="number"] {
+	position: relative;
+	outline: none;
+	background: rgba(red, green, blue, .8);
+	border: 2px solid gray;
+	height: 2rem;
+	font-family: inherit;
+	border-radius: 20px;
+	padding: 1rem;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+}
+
+label {
+	padding: 0.5rem 1.5rem;
+	place-content: top;
+	place-self: top;
+}
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+th, td {
+	border: 1px solid #ddd;
+	padding: 0.5rem;
+	text-align: left;
+}
+
+th{
+	text-align: center;
+	background-color: #f2f2f2;
+}
+
+ul {
+	font-size: 1.5rem;
+	list-style-type: none;
+}
+
+li {
+	padding-top: 0.2rem;
+}
+
+.form {
+	width: 60vw;
+	place-self: center;
+	display: flex;
+	flex-flow: column;
+	padding-top: 2rem;
+	gap: 1rem;
+	justify-content: center;
+	justify-items: center
+}
+
+@keyframes zoom-tela-principal {
+	0% {
+		background-size: 100%;
+	}
+	100% {
+		background-size: 180%;
+	}
+}
+
+@keyframes movimenta-background-direita {
+	0% {
+		background-position: 0 0;
+	}
+	100% {
+		background-position: center;
+	}
+}
+
+.zoom-background-home{
+	animation: zoom-tela-principal 3s ease-in-out;
+}
+
+.movimenta-background-direita {
+	animation: movimenta-background-direita 10s normal;
+}
+
+.header-div {
+	display: flex;
+	justify-items: center;
+	justify-content: center;
+	padding-top: 0.5rem;
+	background: rgba(245, 222, 179, 0.253);
+	position: relative;
+}
+
+.a-home {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	padding: 0.5rem 2rem;
+	text-decoration: underline;
+	font-size: 1.8rem;
+}
+
+.aplicacoes-titulo {
+	font-size: 2.8rem;
+	justify-self: center;
+	/* padding: 0.5rem 0; */
+	margin-top: 1rem;
+	margin-bottom: 2rem;
+	width: 20vw;
+	text-align: center;
+}
+
+.aplicacoes-div {
+	display: flex;
+	flex-flow: row;
+	width: 35vw;
+	justify-self: center;
+}
+
+.linha-vertical {
+	width: 0.5rem;
+	background: linear-gradient(to right, rgba(255,255,255,0), rgba(78, 78, 78, 0.82));
+	height: 50vh;
+}
+
+.aplicacoes-items {
+	font-size: 2.5rem;
+	padding-left: 1.3rem;
+	list-style-type: none;
+}
+
+.aplicacao-item {
+	transform-origin: bottom left;
+	display: inline-block;
+	padding-left: 1rem;
+}
+
+.aplicacao-item:hover {
+	transform: scale(1.1);
+	transition: transform 500ms ease-in-out;
+}
+
+.subaplicacao {
+	padding-top: 0.5rem;
+}
+
+.titulo-form {
+	font-size: 2.8rem;
+	text-align: center;
+}
+
+.codigos-produtos {
+	width: 50%;
+}
+
+.botao-padrao {
+	width: 10rem;
+	font-size: 2rem;
+	border-radius: 20px;
+	padding: 0.2rem;
+	font-family: inherit;
+	transition: all 300ms ease-in-out;
+	place-self: center;
+}
+
+.botao-padrao:hover {
+	cursor: pointer;
+	background-color: rgba(192,0,0,0.8);
+	color: wheat;
+}
+
+.linha-logo {
+	height: 0.5rem;
+	background: linear-gradient(to bottom, rgba(192,0,0,0),rgba(192,0,0,0.8));
+}
+
+.data-multiestrutura {
+	width: 20%;
+}
+
+.form-bomxop {
+	width: 50vw;
+}

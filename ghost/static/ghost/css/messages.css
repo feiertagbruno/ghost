@@ -1,0 +1,23 @@
+.message {
+	padding-top: 1rem;
+	text-align: center;
+	align-self: center;
+	font-size: var(--tamanho-titulo-pequeno);
+}
+
+.message-error {
+	color: brown;
+}
+
+.message-success {
+	color: darkgreen;
+}
+
+.message-warning {
+	color: white;
+	background: red;
+}
+
+.message-info {
+	color: darkblue;
+}

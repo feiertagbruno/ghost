@@ -1,7 +1,4 @@
 venv
-queries.py
 .env
-db.sqlite3
 *xlsx
-static
-testes.py
+testes

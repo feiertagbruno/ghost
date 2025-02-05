@@ -1,0 +1,23 @@
+.flex-flow-row {
+	display: flex;
+	flex-flow: row wrap;
+	align-items: center;
+}
+
+.hidden {
+	display: none;
+}
+
+.central {
+	justify-content: center;
+	place-self: center;
+}
+
+.borda-dupla-inferior {
+	border-bottom: double rgba(78, 78, 78, 0.481);
+}
+
+.width-50 {
+	width: 50%;
+}
+
