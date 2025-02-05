@@ -330,6 +330,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
 		comm = row["comentario_ultima_compra_alt"]
+		# ws.cell(l,13).number_format = "@"
 		ws.cell(l,13, row["ult_compra_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
@@ -338,6 +339,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
 		comm = row["comentario_fechamento_alt"]
+		# ws.cell(l,15).number_format = "@"
 		ws.cell(l,15, row["fechamento_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
@@ -346,6 +348,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
 		comm = row["comentario_custo_medio_alt"]
+		# ws.cell(l,17).number_format = "@"
 		ws.cell(l,17, row["medio_atual_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
@@ -357,14 +360,17 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 		ws.cell(l,23, row["quant_total_utilizada"])
 
 		comm = row["comentario_ultima_compra_op"]
+		ws.cell(l,24).number_format = "@"
 		ws.cell(l,24, row['ult_compra_custo_utilizado_op'])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
 		comm = row["comentario_fechamento_op"]
+		ws.cell(l,25).number_format = "@"
 		ws.cell(l,25, row['fechamento_custo_utilizado_op'])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
 		comm = row["comentario_custo_medio_op"]
+		ws.cell(l,26).number_format = "@"
 		ws.cell(l,26, row['medio_atual_custo_utilizado_op'])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 

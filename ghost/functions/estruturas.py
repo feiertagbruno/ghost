@@ -175,7 +175,7 @@ def busca_custo_e_comentario_alternativos(
 	})
 
 	custos_alternativos = [
-		str(round(consulta_custos.loc[consulta_custos["insumo"] == alt, coluna_custo].values[0] * row["quant_utilizada"],5) ).replace(".",",")
+		f'{round(consulta_custos.loc[consulta_custos["insumo"] == alt, coluna_custo].values[0] * row["quant_utilizada"],5):.5f}'.replace(".",",")
 		for alt in alternativos if alt in consulta_custos["insumo"].values
 	]
 	comentarios_alternativos = [
