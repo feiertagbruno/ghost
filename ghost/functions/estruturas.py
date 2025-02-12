@@ -11,7 +11,7 @@ from ghost.queries import *
 from django.conf import settings
 from django.contrib import messages
 from ghost.models import Processamento
-
+from ghost.utils.funcs import get_last_day_of_month
 
 
 def tratamento_data_referencia(data_referencia):
@@ -36,9 +36,9 @@ def get_engine():
 	DB = environ.get("DB")
 	USER = environ.get("USER")
 	PWD = environ.get("PWD")
-	DRIVER = "ODBC Driver 17 for SQL Server"
+	DRIVER = "ODBC Driver 18 for SQL Server"
 
-	connection_string = f"mssql+pyodbc://{USER}:{PWD}@{SERVER}/{DB}?driver={DRIVER}"
+	connection_string = f"mssql+pyodbc://{USER}:{PWD}@{SERVER}/{DB}?driver={DRIVER}&TrustServerCertificate=yes"
 
 	engine = create_engine(connection_string)
 	
@@ -215,7 +215,8 @@ def traz_custos_por_produto(estrutura, consulta_custos, tupla_nomes_colunas):
 
 
 
-def calcula_custo_total(codigo, descricao, data_referencia_var, estrutura:pd.DataFrame, nomes_colunas, custos_totais_produto = pd.DataFrame()):
+def calcula_custo_total(codigo, descricao, data_referencia_var, estrutura:pd.DataFrame, 
+						nomes_colunas, custos_totais_produto = pd.DataFrame()):
 	coluna_custos_estrutura, coluna_custos_alternativos, nova_coluna_custo_total, nova_coluna_comentario = nomes_colunas
 	
 	if custos_totais_produto.empty:
@@ -265,7 +266,21 @@ def calcula_custo_total(codigo, descricao, data_referencia_var, estrutura:pd.Dat
 		)][["insumo","descricao_insumo"]]
 
 		if not estrutura_alternativos.empty:
-			total += estrutura_alternativos[coluna_custos_alternativos].str.split(";").str[0].str.replace(",",".").astype(float).sum()
+			total += estrutura_alternativos[coluna_custos_alternativos].str.split(";").str[0]\
+				.str.replace(",",".").astype(float).sum()
+			# código inserido para quando o original for zero ou vazio e o alternativo tiver valor,
+			# o valor do alternativo substituir o 0 que está no original
+			estrutura = estrutura.merge(
+				estrutura_alternativos.rename(columns={coluna_custos_alternativos:"custo_alt"}), 
+				on="alternativos", 
+				how="left"
+			)
+			estrutura[coluna_custos_estrutura] = \
+				estrutura["custo_alt"].str.split(";").str[0].str.replace(",",".").astype(float)\
+					.combine_first(estrutura[coluna_custos_estrutura])
+			estrutura = estrutura.drop(columns=["custo_alt"])
+			#
+			
 			comentario += estrutura_alternativos[["alternativos",coluna_custos_alternativos]].agg(
 				lambda x: f"Alt-{x['alternativos'].split(';')[0]}: R$ {x[coluna_custos_alternativos].split(';')[0]}"
 				,axis=1
@@ -279,7 +294,7 @@ def calcula_custo_total(codigo, descricao, data_referencia_var, estrutura:pd.Dat
 	custos_totais_produto.loc[custos_totais_produto["codigo_original"] == codigo, nova_coluna_custo_total] = round(total,5)
 	custos_totais_produto.loc[custos_totais_produto["codigo_original"] == codigo, nova_coluna_comentario] = comentario
 
-	return custos_totais_produto
+	return estrutura, custos_totais_produto
 
 
 
@@ -312,16 +327,52 @@ def get_descricao_produto(codigo, engine = None):
 
 
 
-def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs = True):
+def busca_compra_mais_antiga_por_data_ref(str_codigos, data_referencia, engine):
+	if not engine:
+		engine = get_engine()
+	
+	query = get_query_compra_mais_antiga()
+
+	return pd.read_sql(text(query), engine, params={
+		"produtos": str_codigos,
+		"data_referencia": data_referencia,
+	})
+
+
+
+def busca_menor_fechamento_por_data_ref(str_codigos, data_referencia, engine):
+	if not engine:
+		engine = get_engine()
+	
+	query = get_query_menor_fechamento()
+
+	return pd.read_sql(text(query),engine,params={
+		"produtos": str_codigos,
+		"data_fechamento": data_referencia
+	})
+
+
+
+
+def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs = True, data_std = None):
 
 	if not engine:
 		engine = get_engine()
 	data_referencia = tratamento_data_referencia(data_referencia)
+	if data_std:
+		if isinstance(data_std, str):
+			data_std = get_last_day_of_month(data_std)
 
-	estrutura, todos_os_codigos = explode_extrutura(codigo, data_referencia, engine, abre_todos_os_PIs)
+	estrutura, todos_os_codigos = explode_extrutura(
+		codigo, 
+		data_std if data_std else data_referencia, 
+		engine, 
+		abre_todos_os_PIs
+	)
 
 	if not abre_todos_os_PIs:
-		estrutura = estrutura[(estrutura["tipo_insumo"] != "PI") | ((estrutura["tipo_insumo"] == "PI") & (estrutura["fantasma"] != "S"))]
+		estrutura = estrutura[(estrutura["tipo_insumo"] != "PI") | \
+						((estrutura["tipo_insumo"] == "PI") & (estrutura["fantasma"] != "S"))]
 	else:
 		estrutura = estrutura[estrutura["tipo_insumo"] != "PI"]
 
@@ -332,21 +383,91 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 	except:
 		descricao = get_descricao_produto(codigo, engine)
 
-	custos_ultima_compra = busca_custos_ultima_compra(str_codigos, data_referencia, engine)
-	estrutura = traz_custos_por_produto(estrutura, custos_ultima_compra, ("ult_compra_custo_utilizado","comentario_ultima_compra"))
-	custos_totais_produto = calcula_custo_total(codigo, descricao, data_referencia, estrutura, 
-		["ult_compra_custo_utilizado","ult_compra_custo_utilizado_alt","custo_total_ultima_compra","comentario_ultima_compra"])
+	# ÚLTIMA COMPRA
+	custos_ultima_compra = busca_custos_ultima_compra(
+		str_codigos, 
+		data_std if data_std else data_referencia, 
+		engine
+	)
+	custos_ultima_compra = custos_ultima_compra[
+		(custos_ultima_compra["ult_compra_custo_utilizado"] != 0) & 
+		(custos_ultima_compra["ult_compra_custo_utilizado"].notnull())
+	]
+	# TRAZER CUSTOS OLHANDO PARA FRENTE NO CASO DO BOMXOPSTD
+	if data_std:
+		codigos_nao_encontrados = todos_os_codigos[
+			~todos_os_codigos["todos_os_codigos"].isin(custos_ultima_compra["insumo"])
+		]
+		if not codigos_nao_encontrados.empty:
+			codigos_nao_encontrados_str = forma_string_codigos(codigos_nao_encontrados["todos_os_codigos"])
+			codigos_nao_encontrados = busca_compra_mais_antiga_por_data_ref(
+				codigos_nao_encontrados_str, 
+				data_std if data_std else data_referencia, 
+				engine
+			)
+			custos_ultima_compra = pd.concat([custos_ultima_compra,codigos_nao_encontrados],axis=0, ignore_index=True)
+			codigos_nao_encontrados = None
+
+	###
+	estrutura = traz_custos_por_produto(estrutura, custos_ultima_compra, 
+									 ("ult_compra_custo_utilizado","comentario_ultima_compra"))
+	estrutura, custos_totais_produto = calcula_custo_total(
+		codigo, descricao, data_std if data_std else data_referencia, estrutura, 
+		[
+			"ult_compra_custo_utilizado",
+			"ult_compra_custo_utilizado_alt",
+			"custo_total_ultima_compra",
+			"comentario_ultima_compra"
+		])
 	
-	custos_ultimo_fechamento = busca_custos_ultimo_fechamento(str_codigos, data_referencia, engine)
-	estrutura = traz_custos_por_produto(estrutura, custos_ultimo_fechamento, ("fechamento_custo_utilizado","comentario_fechamento"))
-	custos_totais_produto = calcula_custo_total(codigo, descricao, data_referencia, estrutura,
-		["fechamento_custo_utilizado","fechamento_custo_utilizado_alt","custo_total_ultimo_fechamento","comentario_ultimo_fechamento"],
+	# FECHAMENTO
+	custos_ultimo_fechamento = busca_custos_ultimo_fechamento(
+		str_codigos, 
+		data_std if data_std else data_referencia, 
+		engine
+	)
+
+	# TRAZER CUSTOS OLHANDO PARA FRENTE NO CASO DO BOMXOPSTD
+	if data_std:
+		codigos_nao_encontrados = todos_os_codigos[
+			~todos_os_codigos["todos_os_codigos"].isin(custos_ultimo_fechamento["insumo"])
+		]
+		if not codigos_nao_encontrados.empty:
+			codigos_nao_encontrados_str = forma_string_codigos(codigos_nao_encontrados["todos_os_codigos"])
+			codigos_nao_encontrados = busca_menor_fechamento_por_data_ref(
+				codigos_nao_encontrados_str, 
+				data_std if data_std else data_referencia, 
+				engine
+			)
+			custos_ultimo_fechamento = pd.concat(
+				[custos_ultimo_fechamento,codigos_nao_encontrados],axis=0, ignore_index=True
+			)
+
+	###
+	
+	estrutura = traz_custos_por_produto(estrutura, custos_ultimo_fechamento, 
+									 ("fechamento_custo_utilizado","comentario_fechamento"))
+	estrutura, custos_totais_produto = calcula_custo_total(
+		codigo, descricao, data_std if data_std else data_referencia, estrutura,
+		[
+			"fechamento_custo_utilizado",
+			"fechamento_custo_utilizado_alt",
+			"custo_total_ultimo_fechamento",
+			"comentario_ultimo_fechamento"
+		],
 		custos_totais_produto)
 	
+	# MÉDIO ATUAL
 	custos_medios = busca_custos_medios(str_codigos, data_referencia, engine)
-	estrutura = traz_custos_por_produto(estrutura, custos_medios, ("medio_atual_custo_utilizado", "comentario_custo_medio"))
-	custos_totais_produto = calcula_custo_total(codigo, descricao, data_referencia, estrutura, 
-		["medio_atual_custo_utilizado","medio_atual_custo_utilizado_alt","total_pelo_custo_medio", "comentario_custo_medio"],
+	estrutura = traz_custos_por_produto(estrutura, custos_medios, 
+									 ("medio_atual_custo_utilizado", "comentario_custo_medio"))
+	estrutura, custos_totais_produto = calcula_custo_total(codigo, descricao, data_referencia, estrutura, 
+		[
+			"medio_atual_custo_utilizado",
+			"medio_atual_custo_utilizado_alt",
+			"total_pelo_custo_medio", 
+			"comentario_custo_medio"
+		],
 		custos_totais_produto)
 	
 	estrutura["codigo_original"] = str(codigo)

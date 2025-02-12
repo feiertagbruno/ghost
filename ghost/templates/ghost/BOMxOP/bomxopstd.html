@@ -1,0 +1,41 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block content %}
+
+	<form id="form-bomxop-id" action="{% url "ghost:bomxopstd-post" %}" class="form form-bomxop" method="post">
+		<span class="titulo-form borda-dupla-inferior">BOM x OP (Standard)</span>
+		
+		{% csrf_token %}
+		<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
+
+		<div class="flex-flow-row">
+			<label for="numero-op-id">Número da OP: </label>
+			<input type="text" name="numero-op" id="numero-op-id" maxlength="11">
+		</div>
+
+		<div class="flex-flow-row">
+			<label for="data-inicial-id">Data Inicial: </label>
+			<input class="data-multiestrutura" type="date" name="data-inicial" id="data-inicial-id">
+
+			<label for="data-final-id">Data Final: </label>
+			<input class="data-multiestrutura" type="date" name="data-final" id="data-final-id">
+
+		</div>
+
+		<div class="flex-flow-row">
+			<label for="codigo-produto-id">Última OP do Produto: </label>
+			<input type="text" name="codigo-produto" id="codigo-produto-id" maxlength="15">
+		</div>
+
+		<div class="flex-flow-row">
+			<label for="data-std-id">Última OP do Produto: </label>
+			<input type="month" name="data-std" id="data-std-id" value="2024-09">
+		</div>
+		
+		<button id="botao-bomxop" class="botao-padrao" type="submit">Buscar</button>
+
+	</form>
+
+	<script src="{% static 'ghost/js/bomxopstd.js' %}"></script>
+{% endblock content %}

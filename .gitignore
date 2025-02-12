@@ -2,3 +2,4 @@ venv
 .env
 *xlsx
 testes
+__pycache__

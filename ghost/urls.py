@@ -12,4 +12,6 @@ urlpatterns = [
 	path("ghost/bomxoppost", views.bomxop_post, name="bomxop-post"),
 	path("ghost/relatoriobomxopsimples", views.baixar_relatorio_bomxop_simples, name="relatorio-bomxop-simples"),
 	path("buscarprocessamento/", views.buscar_processamento, name="buscar_processamento"),
+	path("ghost/bomxopstd", views.bomxopstd, name="bomxopstd"),
+	path("ghost/bomxopstdpost", views.bomxopstd_post, name="bomxopstd-post"),
 ]

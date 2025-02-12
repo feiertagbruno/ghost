@@ -16,6 +16,7 @@ import pandas as pd
 from ghost.models import Processamento
 from django.http import JsonResponse
 import json
+from ghost.utils.funcs import get_last_day_of_month
 
 pd.set_option("future.no_silent_downcasting", True)
 
@@ -284,3 +285,94 @@ def buscar_processamento(request):
 		}
 
 	return JsonResponse(response)
+
+
+
+
+def bomxopstd(request):
+	return render(request, "ghost/BOMxOP/bomxopstd.html")
+
+
+
+
+def extrai_bomxopstd_pela_op(request, numero_op, engine = None):
+
+	if not engine:
+		engine = get_engine()
+	
+	data_std = request.POST.get("data-std")
+	if data_std:
+		if isinstance(data_std, str):
+			data_std = get_last_day_of_month(data_std)
+
+	codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(numero_op, engine, data_std)
+
+	if not codigo: return redirect(reverse("ghost:bomxopstd"))
+
+	estrutura, custos_totais_estrutura = estrutura_simples(
+		codigo=codigo, 
+		data_referencia=data_referencia, 
+		engine=engine, 
+		abre_todos_os_PIs=False,
+		data_std=data_std
+	)
+	estrutura_com_op = combina_estrutura_e_op(estrutura, consulta_op)
+	custos_totais_estrutura_op = combina_custos_totais_estrutura_e_op(custos_totais_estrutura, custos_totais_op)
+
+	caminho_relatorio_excel = gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutura_op, data_referencia)
+
+	custos_totais_estrutura_op["data_referencia"] = custos_totais_estrutura_op["data_referencia"].dt.strftime("%d/%m/%Y")
+
+	custos_totais_dict = custos_totais_estrutura_op.to_dict(orient="records")
+
+	context = {
+		"custos_totais": custos_totais_dict,
+		"path_xlsx": caminho_relatorio_excel,
+	}
+
+	return render(request,"ghost/BOMxOP/bomxop_post.html", context)
+
+
+
+
+
+def bomxopstd_post(request):
+
+	if request.method != "POST":
+		return redirect(reverse("ghost:bomxop"))
+
+	numero_op = request.POST.get("numero-op")
+
+	if numero_op:
+		if len(numero_op) != 11:
+			messages.info(request, "Há um erro de digitação no número da OP")
+			return redirect(reverse("ghost:bomxop"))
+
+		return extrai_bomxopstd_pela_op(request, numero_op)
+	
+	data_inicial = request.POST.get("data-inicial")
+	data_final = request.POST.get("data-final")
+
+	if data_inicial and data_final:
+		data_inicial = tratamento_data_referencia(data_inicial)
+		data_final = tratamento_data_referencia(data_final)
+		return extrai_bomxop_por_periodo(request, data_inicial, data_final)
+	
+	produto = request.POST.get("codigo-produto")
+
+	if not produto:
+		messages.info(request, "Dados Inválidos")
+		return redirect(reverse("ghost:bomxop"))
+	
+	produto = str(produto).strip().upper()
+
+	if len(produto) != 7 and len(produto) != 15:
+		messages.info(request, "Há um erro de digitação no produto")
+		return redirect(reverse("ghost:bomxop"))
+	
+	engine = get_engine()
+	numero_op = get_numero_op_pelo_produto(produto, engine)
+	if numero_op:
+		return extrai_bomxopstd_pela_op(request, numero_op, engine)
+
+	return redirect(reverse("ghost:bomxopstd"))

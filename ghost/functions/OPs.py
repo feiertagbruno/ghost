@@ -14,9 +14,10 @@ from openpyxl.comments import Comment
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 from os import path
+from ghost.utils.funcs import get_last_day_of_month
 
 
-def get_info_op(numero_op, engine = None):
+def get_info_op(numero_op, engine = None, data_std = None):
 
 	if not engine:
 		engine = get_engine()
@@ -30,26 +31,40 @@ def get_info_op(numero_op, engine = None):
 	codigo = resultado["codigo_original"].values[0]
 	data_referencia = resultado["data_referencia"].values[0]
 	data_referencia = tratamento_data_referencia(data_referencia)
+	if data_std:
+		if isinstance(data_std, str):
+			data_std = get_last_day_of_month(date_str=data_std)
 	descricao = get_descricao_produto(codigo, engine)
 
 	str_codigos = forma_string_codigos(resultado["insumo"])
 
-	custos_ultima_compra = busca_custos_ultima_compra(str_codigos, data_referencia, engine)
-	resultado = traz_custos_por_produto(resultado, custos_ultima_compra, ("ult_compra_custo_utilizado","comentario_ultima_compra"))
-	custos_totais_op = calcula_custo_total(codigo, descricao, data_referencia, resultado,
+	custos_ultima_compra = busca_custos_ultima_compra(
+		str_codigos=str_codigos, 
+		data_referencia=data_std if data_std else data_referencia, 
+		engine=engine
+	)
+	resultado = traz_custos_por_produto(resultado, custos_ultima_compra, 
+									 ("ult_compra_custo_utilizado","comentario_ultima_compra"))
+	resulta, custos_totais_op = calcula_custo_total(
+		codigo, descricao, data_std if data_std else data_referencia, resultado,
 		["ult_compra_custo_utilizado", "", "custo_total_ultima_compra_op","comentario_ultima_compra_op"]
 	)
 
-	custos_ultimo_fechamento = busca_custos_ultimo_fechamento(str_codigos, data_referencia, engine)
-	resultado = traz_custos_por_produto(resultado, custos_ultimo_fechamento, ("fechamento_custo_utilizado","comentario_fechamento"))
-	custos_totais_op = calcula_custo_total(codigo, descricao, data_referencia, resultado,
+	custos_ultimo_fechamento = busca_custos_ultimo_fechamento(
+		str_codigos, 
+		data_std if data_std else data_referencia, 
+		engine
+	)
+	resultado = traz_custos_por_produto(resultado, custos_ultimo_fechamento, 
+									 ("fechamento_custo_utilizado","comentario_fechamento"))
+	resultado, custos_totais_op = calcula_custo_total(codigo, descricao, data_referencia, resultado,
 		["fechamento_custo_utilizado", "", "custo_total_ult_fechamento_op", "comentario_fechamento_op"],
 		custos_totais_op
 	)
 
 	custos_medios = busca_custos_medios(str_codigos, data_referencia, engine)
 	resultado = traz_custos_por_produto(resultado, custos_medios, ("medio_atual_custo_utilizado", "comentario_custo_medio"))
-	custos_totais_op = calcula_custo_total(codigo, descricao, data_referencia, resultado,
+	resultado, custos_totais_op = calcula_custo_total(codigo, descricao, data_referencia, resultado,
 		["medio_atual_custo_utilizado", "", "total_pelo_custo_medio_op", "comentario_custo_medio_op"],
 		custos_totais_op
 	)
