@@ -9,8 +9,10 @@ pyodbc==5.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 pytz==2024.2
+pywin32==308
 six==1.17.0
 SQLAlchemy==2.0.37
 sqlparse==0.5.3
 typing_extensions==4.12.2
 tzdata==2025.1
+xlwings==0.33.7
