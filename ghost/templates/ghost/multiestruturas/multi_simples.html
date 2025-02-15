@@ -16,6 +16,16 @@
 		<label for="codigos-produtos-id">Códigos dos Produtos: </label>
 		<textarea class="codigos-produtos" name="codigos-produtos" id="codigos-produtos-id"></textarea>
 	</div>
+	<div class="flex-flow-row linha-form">
+		<label for="explodir-pis-id">Explodir PIs: </label>
+		<input 
+			type="checkbox" 
+			name="explodir-pis" 
+			id="explodir-pis-id" 
+			checked
+		>
+		<span id="texto-checkbox-explodir-pis" class="low-emphasis">    (Serão explodidos todos os PIs)</span>
+	</div>
 	<button id="botao-multi-simples" class="botao-padrao" type="submit">Iniciar</button>
 </form>
 <script src="{% static "ghost/js/multiSimples.js" %}"></script>

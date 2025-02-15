@@ -16,7 +16,7 @@ import pandas as pd
 from ghost.models import Processamento
 from django.http import JsonResponse
 import json
-from ghost.utils.funcs import get_last_day_of_month
+from ghost.utils.funcs import extrai_data_fechamento_de_string_yyyy_mm
 
 pd.set_option("future.no_silent_downcasting", True)
 
@@ -105,6 +105,7 @@ def extrai_bomxop_pela_op(request, numero_op, engine = None):
 
 	estrutura, custos_totais_estrutura = estrutura_simples(codigo, data_referencia, engine, False)
 	estrutura_com_op = combina_estrutura_e_op(estrutura, consulta_op)
+
 	custos_totais_estrutura_op = combina_custos_totais_estrutura_e_op(custos_totais_estrutura, custos_totais_op)
 
 	caminho_relatorio_excel = gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutura_op, data_referencia)
@@ -142,6 +143,11 @@ def extrai_bomxop_por_periodo(request, data_inicial, data_final):
 	engine = get_engine()
 	OPs = get_numeros_OPs_por_periodo(data_inicial, data_final, engine)
 
+	data_std = request.POST.get('data-std')
+	if data_std:
+		if isinstance(data_std,str):
+			data_std = extrai_data_fechamento_de_string_yyyy_mm(data_std)
+
 	if not OPs:
 		messages.info(request, "Não existem OPs finalizadas neste período.")
 		return redirect(reverse("ghost:bomxop"))
@@ -167,14 +173,14 @@ def extrai_bomxop_por_periodo(request, data_inicial, data_final):
 		processamento.save()
 		################ 
 
-		codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(numero_op, engine)
+		codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(numero_op, engine, data_std)
 
 		################ processamento
 		processamento.mensagem2 = f'Extraindo estrutura de {codigo}'
 		processamento.save()
 		################
 
-		estrutura, custos_totais_estrutura = estrutura_simples(codigo, data_referencia, engine, False)
+		estrutura, custos_totais_estrutura = estrutura_simples(codigo, data_referencia, engine, False, data_std)
 
 		################ processamento
 		processamento.mensagem2 = f'Unindo estrutura e OP'
@@ -303,7 +309,7 @@ def extrai_bomxopstd_pela_op(request, numero_op, engine = None):
 	data_std = request.POST.get("data-std")
 	if data_std:
 		if isinstance(data_std, str):
-			data_std = get_last_day_of_month(data_std)
+			data_std = extrai_data_fechamento_de_string_yyyy_mm(data_std)
 
 	codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(numero_op, engine, data_std)
 
@@ -317,6 +323,7 @@ def extrai_bomxopstd_pela_op(request, numero_op, engine = None):
 		data_std=data_std
 	)
 	estrutura_com_op = combina_estrutura_e_op(estrutura, consulta_op)
+
 	custos_totais_estrutura_op = combina_custos_totais_estrutura_e_op(custos_totais_estrutura, custos_totais_op)
 
 	caminho_relatorio_excel = gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutura_op, data_referencia)
@@ -339,14 +346,14 @@ def extrai_bomxopstd_pela_op(request, numero_op, engine = None):
 def bomxopstd_post(request):
 
 	if request.method != "POST":
-		return redirect(reverse("ghost:bomxop"))
+		return redirect(reverse("ghost:bomxopstd"))
 
 	numero_op = request.POST.get("numero-op")
 
 	if numero_op:
 		if len(numero_op) != 11:
 			messages.info(request, "Há um erro de digitação no número da OP")
-			return redirect(reverse("ghost:bomxop"))
+			return redirect(reverse("ghost:bomxopstd"))
 
 		return extrai_bomxopstd_pela_op(request, numero_op)
 	
@@ -362,13 +369,13 @@ def bomxopstd_post(request):
 
 	if not produto:
 		messages.info(request, "Dados Inválidos")
-		return redirect(reverse("ghost:bomxop"))
+		return redirect(reverse("ghost:bomxopstd"))
 	
 	produto = str(produto).strip().upper()
 
 	if len(produto) != 7 and len(produto) != 15:
 		messages.info(request, "Há um erro de digitação no produto")
-		return redirect(reverse("ghost:bomxop"))
+		return redirect(reverse("ghost:bomxopstd"))
 	
 	engine = get_engine()
 	numero_op = get_numero_op_pelo_produto(produto, engine)

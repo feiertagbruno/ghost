@@ -2,7 +2,8 @@ from django.conf import settings
 from ghost.functions.estruturas import (
 	get_engine, tratamento_data_referencia, forma_string_codigos,
 	busca_custos_ultima_compra, busca_custos_ultimo_fechamento, busca_custos_medios,
-	traz_custos_por_produto, calcula_custo_total, get_descricao_produto
+	traz_custos_por_produto, calcula_custo_total, get_descricao_produto,
+	busca_compra_mais_antiga_por_data_ref, busca_menor_fechamento_por_data_ref
 )
 from ghost.queries import (
 	get_query_detalhamento_op,get_query_numeros_op_por_periodo, get_query_busca_op_pelo_produto
@@ -13,8 +14,9 @@ from openpyxl import Workbook
 from openpyxl.comments import Comment
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
+from openpyxl.styles import PatternFill
 from os import path
-from ghost.utils.funcs import get_last_day_of_month
+from ghost.utils.funcs import extrai_data_fechamento_de_string_yyyy_mm
 
 
 def get_info_op(numero_op, engine = None, data_std = None):
@@ -25,6 +27,7 @@ def get_info_op(numero_op, engine = None, data_std = None):
 	query = get_query_detalhamento_op()
 
 	resultado = pd.read_sql(text(query), engine, params={"numero_op": numero_op} )
+	todos_os_codigos = resultado[["insumo"]].rename(columns={"insumo":"todos_os_codigos"})
 
 	if resultado.empty: return [None, None, None, None]
 
@@ -33,28 +36,85 @@ def get_info_op(numero_op, engine = None, data_std = None):
 	data_referencia = tratamento_data_referencia(data_referencia)
 	if data_std:
 		if isinstance(data_std, str):
-			data_std = get_last_day_of_month(date_str=data_std)
-	descricao = get_descricao_produto(codigo, engine)
+			data_std = extrai_data_fechamento_de_string_yyyy_mm(date_str=data_std)
+	descricao, tipo = get_descricao_produto(codigo, engine)
 
 	str_codigos = forma_string_codigos(resultado["insumo"])
 
+	# ÚLTIMA COMPRA
 	custos_ultima_compra = busca_custos_ultima_compra(
 		str_codigos=str_codigos, 
 		data_referencia=data_std if data_std else data_referencia, 
 		engine=engine
 	)
+	# TRAZER CUSTOS OLHANDO PARA FRENTE NO CASO DO BOMXOPSTD
+	if data_std:
+		custos_ultima_compra = custos_ultima_compra[ #pega produtos com preço zerado
+			(custos_ultima_compra["ult_compra_custo_utilizado"] != 0) |
+			(custos_ultima_compra["ult_compra_custo_utilizado"].notnull())
+		]
+		codigos_nao_encontrados = todos_os_codigos[
+			~todos_os_codigos["todos_os_codigos"].isin(custos_ultima_compra["insumo"])
+		]
+		if not codigos_nao_encontrados.empty:
+			codigos_nao_encontrados_str = forma_string_codigos(codigos_nao_encontrados["todos_os_codigos"])
+			codigos_nao_encontrados = busca_compra_mais_antiga_por_data_ref(
+				codigos_nao_encontrados_str, 
+				data_std if data_std else data_referencia, 
+				engine
+			)
+			if not codigos_nao_encontrados.empty:
+				custos_ultima_compra = pd.concat([custos_ultima_compra,codigos_nao_encontrados],axis=0, ignore_index=True)
+	###
+
 	resultado = traz_custos_por_produto(resultado, custos_ultima_compra, 
 									 ("ult_compra_custo_utilizado","comentario_ultima_compra"))
-	resulta, custos_totais_op = calcula_custo_total(
+	resultado, custos_totais_op = calcula_custo_total(
 		codigo, descricao, data_std if data_std else data_referencia, resultado,
 		["ult_compra_custo_utilizado", "", "custo_total_ultima_compra_op","comentario_ultima_compra_op"]
 	)
 
+	# FECHAMENTO
 	custos_ultimo_fechamento = busca_custos_ultimo_fechamento(
 		str_codigos, 
 		data_std if data_std else data_referencia, 
 		engine
 	)
+
+	# TRAZER CUSTOS OLHANDO PARA FRENTE NO CASO DO BOMXOPSTD
+	if data_std:
+		codigos_nao_encontrados = todos_os_codigos[
+			~todos_os_codigos["todos_os_codigos"].isin(custos_ultimo_fechamento["insumo"])
+		]
+		if not codigos_nao_encontrados.empty:
+			codigos_nao_encontrados_str = forma_string_codigos(codigos_nao_encontrados["todos_os_codigos"])
+			codigos_nao_encontrados = busca_menor_fechamento_por_data_ref(
+				codigos_nao_encontrados_str, 
+				data_std if data_std else data_referencia, 
+				engine
+			)
+			if not codigos_nao_encontrados.empty:
+				custos_ultimo_fechamento = pd.concat(
+					[custos_ultimo_fechamento,codigos_nao_encontrados],axis=0, ignore_index=True
+				)
+		codigos_nao_encontrados = todos_os_codigos[
+			~todos_os_codigos["todos_os_codigos"].isin(custos_ultimo_fechamento["insumo"])
+		]
+		if not codigos_nao_encontrados.empty:
+			codigos_nao_encontrados_str = forma_string_codigos(codigos_nao_encontrados["todos_os_codigos"])
+			codigos_nao_encontrados = busca_custos_medios(
+				codigos_nao_encontrados_str, data_referencia, engine
+			)
+			if not codigos_nao_encontrados.empty:
+				codigos_nao_encontrados = codigos_nao_encontrados.rename(columns={
+					"medio_atual_custo_utilizado": "fechamento_custo_utilizado",
+					"comentario_custo_medio": "comentario_fechamento",
+				})
+				custos_ultimo_fechamento = pd.concat(
+					[custos_ultimo_fechamento,codigos_nao_encontrados],axis=0, ignore_index=True
+				)
+	###
+
 	resultado = traz_custos_por_produto(resultado, custos_ultimo_fechamento, 
 									 ("fechamento_custo_utilizado","comentario_fechamento"))
 	resultado, custos_totais_op = calcula_custo_total(codigo, descricao, data_referencia, resultado,
@@ -62,12 +122,14 @@ def get_info_op(numero_op, engine = None, data_std = None):
 		custos_totais_op
 	)
 
+	# CUSTO MÉDIO ATUAL
 	custos_medios = busca_custos_medios(str_codigos, data_referencia, engine)
 	resultado = traz_custos_por_produto(resultado, custos_medios, ("medio_atual_custo_utilizado", "comentario_custo_medio"))
 	resultado, custos_totais_op = calcula_custo_total(codigo, descricao, data_referencia, resultado,
 		["medio_atual_custo_utilizado", "", "total_pelo_custo_medio_op", "comentario_custo_medio_op"],
 		custos_totais_op
 	)
+	#
 
 	custos_totais_op["op"] = numero_op
 
@@ -209,8 +271,11 @@ def combina_estrutura_e_op(estrutura:pd.DataFrame, consulta_op:pd.DataFrame):
 
 	descricao_original = estrutura.loc[estrutura["descricao_cod_original"].notnull(),"descricao_cod_original"].values[0]
 	estrutura["descricao_cod_original"] = descricao_original
+	tipo_original = estrutura.loc[estrutura["descricao_cod_original"].notnull(),"tipo_original"].values[0]
+	estrutura["tipo_original"] = tipo_original
 
-	#estrutura.to_excel("estrutura.xlsx", "relatorio", engine="openpyxl")
+	estrutura = identifica_ocorrencia_estrutura_com_op(estrutura)
+
 	return estrutura
 
 
@@ -219,7 +284,7 @@ def combina_estrutura_e_op(estrutura:pd.DataFrame, consulta_op:pd.DataFrame):
 def combina_custos_totais_estrutura_e_op(custos_totais_estrutura: pd.DataFrame, custos_totais_op):
 
 	custos_totais_estrutura_op = custos_totais_estrutura.merge(
-		custos_totais_op,how="left",on=["codigo_original","descricao_cod_original","data_referencia"]
+		custos_totais_op,how="left",on=["codigo_original","tipo","descricao_cod_original","data_referencia"]
 	)
 	#custos_totais_estrutura_op.to_excel("custos_totais_estrutura_op.xlsx","a", engine="openpyxl")
 
@@ -230,6 +295,8 @@ def combina_custos_totais_estrutura_e_op(custos_totais_estrutura: pd.DataFrame, 
 
 def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutura_op, data_referencia):
 	data_referencia = tratamento_data_referencia(data_referencia)
+	verde = PatternFill(start_color="00C400", fill_type="solid")
+	amarelo = PatternFill(start_color="FFFF00", fill_type="solid")
 
 	colunas_numericas = {
 		"quant_utilizada",
@@ -260,6 +327,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 	nomes_das_colunas = {
 		'codigo_original':"Cód Original",
 		'descricao_cod_original':"Descrição Orig",
+		"tipo_original": "Tipo Cód Orig",
 		'codigo_pai':"Código Pai", 
 		'descricao_pai':"Descrição Pai", 
 		'tipo_pai':"Tipo Pai", 
@@ -286,6 +354,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 		'medio_atual_custo_utilizado_op':"Médio Atual OP",
 		"emissao_op": "Data Emissão OP",
 		"fechamento_op": "Data Fech OP",
+		"ocorrencia": "Ocorrência",
 	}
 
 	wb = Workbook()
@@ -295,6 +364,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 	ws.append([
 		nomes_das_colunas["codigo_original"],
 		nomes_das_colunas["descricao_cod_original"],
+		nomes_das_colunas["tipo_original"],
 		nomes_das_colunas["codigo_pai"],
 		nomes_das_colunas["descricao_pai"],
 		nomes_das_colunas["tipo_pai"],
@@ -306,13 +376,10 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 		nomes_das_colunas["alternativos"],
 		nomes_das_colunas["ult_compra_custo_utilizado"],
 		nomes_das_colunas["ult_compra_custo_utilizado_alt"],
-		# "U Compra BOM TabDin",
 		nomes_das_colunas["fechamento_custo_utilizado"],
 		nomes_das_colunas["fechamento_custo_utilizado_alt"],
-		# "U Fech BOM TabDin",
 		nomes_das_colunas["medio_atual_custo_utilizado"],
 		nomes_das_colunas["medio_atual_custo_utilizado_alt"],
-		# "C Medio BOM TabDin",
 		nomes_das_colunas["op"],
 		nomes_das_colunas["insumo_op"],
 		nomes_das_colunas["descricao_insumo_op"],
@@ -324,73 +391,112 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 		nomes_das_colunas['medio_atual_custo_utilizado_op'],
 		nomes_das_colunas["emissao_op"],
 		nomes_das_colunas["fechamento_op"],
+		nomes_das_colunas["ocorrencia"],
 	])
 
 	for i, row in estrutura_com_op.iterrows():
 		l = i+2
-		ws.cell(l, 1, row["codigo_original"])
-		ws.cell(l, 2, row["descricao_cod_original"])
-		ws.cell(l, 3, row["codigo_pai"])
-		ws.cell(l, 4, row["descricao_pai"])
-		ws.cell(l, 5, row["tipo_pai"])
-		ws.cell(l, 6, row["insumo"])
-		ws.cell(l, 7, row["descricao_insumo"])
-		ws.cell(l, 8, row["quant_utilizada"])
-		ws.cell(l, 9, row["tipo_insumo"])
-		ws.cell(l,10, row["origem"])
-		ws.cell(l,11, row["alternativos"])
+		c = 1
+		ws.cell(l, c, row["codigo_original"])
+		c += 1
+		ws.cell(l, c, row["descricao_cod_original"])
+		c += 1
+		ws.cell(l, c, row["tipo_original"])
+		c += 1
+		ws.cell(l, c, row["codigo_pai"])
+		c += 1
+		ws.cell(l, c, row["descricao_pai"])
+		c += 1
+		ws.cell(l, c, row["tipo_pai"])
+		c += 1
+		ws.cell(l, c, row["insumo"]).fill = verde
+		c += 1
+		ws.cell(l, c, row["descricao_insumo"])
+		c += 1
+		ws.cell(l, c, row["quant_utilizada"])
+		c += 1
+		ws.cell(l, c, row["tipo_insumo"])
+		c += 1
+		ws.cell(l, c, row["origem"])
+		c += 1
+		ws.cell(l, c, row["alternativos"])
 
+		c += 1
 		comm = row["comentario_ultima_compra"]
-		ws.cell(l,12, row["ult_compra_custo_utilizado"])\
+		ws.cell(l, c, row["ult_compra_custo_utilizado"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
+		ws.cell(l, c).fill = amarelo
 		
+		c += 1
 		comm = row["comentario_ultima_compra_alt"]
 		# ws.cell(l,13).number_format = "@"
-		ws.cell(l,13, row["ult_compra_custo_utilizado_alt"])\
+		ws.cell(l, c, row["ult_compra_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
+		c += 1
 		comm = row["comentario_fechamento"]
-		ws.cell(l,14, row["fechamento_custo_utilizado"])\
+		ws.cell(l, c, row["fechamento_custo_utilizado"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
-		
+		ws.cell(l, c).fill = amarelo
+
+		c += 1
 		comm = row["comentario_fechamento_alt"]
 		# ws.cell(l,15).number_format = "@"
-		ws.cell(l,15, row["fechamento_custo_utilizado_alt"])\
+		ws.cell(l, c, row["fechamento_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
+		c += 1
 		comm = row["comentario_custo_medio"]
-		ws.cell(l,16, row["medio_atual_custo_utilizado"])\
+		ws.cell(l, c, row["medio_atual_custo_utilizado"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
-		
+		ws.cell(l, c).fill = amarelo
+
+		c += 1
 		comm = row["comentario_custo_medio_alt"]
 		# ws.cell(l,17).number_format = "@"
-		ws.cell(l,17, row["medio_atual_custo_utilizado_alt"])\
+		ws.cell(l, c, row["medio_atual_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
-		ws.cell(l,18, row["op"])
-		ws.cell(l,19, row["insumo_op"])
-		ws.cell(l,20, row["descricao_insumo_op"])
-		ws.cell(l,21, row["quant_utilizada_op"])
-		ws.cell(l,22, row["quant_produzida"])
-		ws.cell(l,23, row["quant_total_utilizada"])
+		c += 1
+		ws.cell(l, c, row["op"])
+		c += 1
+		ws.cell(l, c, row["insumo_op"]).fill = verde
+		c += 1
+		ws.cell(l, c, row["descricao_insumo_op"])
+		c += 1
+		ws.cell(l, c, row["quant_utilizada_op"])
+		c += 1
+		ws.cell(l, c, row["quant_produzida"])
+		c += 1
+		ws.cell(l, c, row["quant_total_utilizada"])
 
+		c += 1
 		comm = row["comentario_ultima_compra_op"]
-		ws.cell(l,24).number_format = "@"
-		ws.cell(l,24, row['ult_compra_custo_utilizado_op'])\
+		ws.cell(l, c).number_format = "@"
+		ws.cell(l, c, row['ult_compra_custo_utilizado_op'])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
-		
+		ws.cell(l, c).fill = amarelo
+
+		c += 1
 		comm = row["comentario_fechamento_op"]
-		ws.cell(l,25).number_format = "@"
-		ws.cell(l,25, row['fechamento_custo_utilizado_op'])\
+		ws.cell(l, c).number_format = "@"
+		ws.cell(l, c, row['fechamento_custo_utilizado_op'])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
+		ws.cell(l, c).fill = amarelo
 
+		c += 1
 		comm = row["comentario_custo_medio_op"]
-		ws.cell(l,26).number_format = "@"
-		ws.cell(l,26, row['medio_atual_custo_utilizado_op'])\
+		ws.cell(l, c).number_format = "@"
+		ws.cell(l, c, row['medio_atual_custo_utilizado_op'])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
+		ws.cell(l, c).fill = amarelo
 
-		ws.cell(l,27, row["emissao_op"]).number_format = "DD/MM/YYYY"
-		ws.cell(l,28, row["fechamento_op"]).number_format = "DD/MM/YYYY"
+		c += 1
+		ws.cell(l, c, row["emissao_op"]).number_format = "DD/MM/YYYY"
+		c += 1
+		ws.cell(l, c, row["fechamento_op"]).number_format = "DD/MM/YYYY"
+		c += 1
+		ws.cell(l, c, row["ocorrencia"])
 
 
 	colunas_para_ocultar = {
@@ -431,6 +537,7 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 	ws2.append([
 		"OP",
 		"Data de Referência", "Código","Descrição",
+		"Tipo",
 		"U Entradas BOM",
 		"U Entradas OP",
 		"U Fechamento BOM",
@@ -441,33 +548,45 @@ def gerar_relatorio_excel_bomxop_simples(estrutura_com_op, custos_totais_estrutu
 
 	for i, row in custos_totais_estrutura_op.iterrows():
 		l = i+2
-		ws2.cell(l, 1, row["op"])
-		ws2.cell(l, 2, data_referencia).number_format = "DD/MM/YYYY"
-		ws2.cell(l, 3, row["codigo_original"])
-		ws2.cell(l, 4, row["descricao_cod_original"])
+		c = 1
+		ws2.cell(l, c, row["op"])
+		c += 1
+		ws2.cell(l, c, data_referencia).number_format = "DD/MM/YYYY"
+		c += 1
+		ws2.cell(l, c, row["codigo_original"])
+		c += 1
+		ws2.cell(l, c, row["descricao_cod_original"])
+		c += 1
+		ws2.cell(l, c, row["tipo"])
 
-		comm = row["comentario_ultima_compra"]
-		ws2.cell(l, 5, row["custo_total_ultima_compra"])\
+		c += 1
+		comm = str(row["comentario_ultima_compra"])
+		ws2.cell(l, c, row["custo_total_ultima_compra"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
-		comm = row["comentario_ultima_compra_op"]
-		ws2.cell(l, 6, row["custo_total_ultima_compra_op"])\
+		c += 1
+		comm = str(row["comentario_ultima_compra_op"])
+		ws2.cell(l, c, row["custo_total_ultima_compra_op"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
-		comm = row["comentario_ultimo_fechamento"]
-		ws2.cell(l, 7, row["custo_total_ultimo_fechamento"])\
+		c += 1
+		comm = str(row["comentario_ultimo_fechamento"])
+		ws2.cell(l, c, row["custo_total_ultimo_fechamento"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
-		comm = row["comentario_fechamento_op"]
-		ws2.cell(l, 8, row["custo_total_ult_fechamento_op"])\
+		c += 1
+		comm = str(row["comentario_fechamento_op"])
+		ws2.cell(l, c, row["custo_total_ult_fechamento_op"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
-		comm = row["comentario_custo_medio"]
-		ws2.cell(l, 9, row["total_pelo_custo_medio"])\
+		c += 1
+		comm = str(row["comentario_custo_medio"])
+		ws2.cell(l, c, row["total_pelo_custo_medio"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
-		comm = row["comentario_custo_medio_op"]
-		ws2.cell(l, 10, row["total_pelo_custo_medio_op"])\
+		c += 1
+		comm = str(row["comentario_custo_medio_op"])
+		ws2.cell(l,  c, row["total_pelo_custo_medio_op"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
 	ult_coluna = get_column_letter(ws2.max_column)
@@ -508,3 +627,30 @@ def get_numero_op_pelo_produto(produto, engine = None):
 	resultado = pd.read_sql(text(query), engine, params={"produto": produto})
 	numero_op = str(resultado["op"].values[0])
 	return numero_op
+
+
+
+
+def identifica_ocorrencia_estrutura_com_op(estrutura_com_op):
+
+	estrutura_com_op.loc[estrutura_com_op["insumo"] == estrutura_com_op["insumo_op"],"ocorrencia"] = "ORIGINAL"
+	estrutura_com_op.loc[(
+		(
+			(estrutura_com_op["insumo"] != estrutura_com_op["insumo_op"]) & 
+			(
+				(estrutura_com_op["insumo"].notnull()) & (estrutura_com_op["insumo"] != "")) & 
+				((estrutura_com_op["insumo_op"].notnull()) & (estrutura_com_op["insumo_op"] != "")
+			)
+		)
+	),"ocorrencia"] = "ALTERNATIVO"
+	estrutura_com_op.loc[(
+		(
+			(estrutura_com_op["insumo"] != estrutura_com_op["insumo_op"]) & 
+			(
+				((estrutura_com_op["insumo"].isnull()) | (estrutura_com_op["insumo"] == "")) | 
+				((estrutura_com_op["insumo_op"].isnull()) | (estrutura_com_op["insumo_op"] == ""))
+			)
+		)
+	),"ocorrencia"] = "DESVIO"
+
+	return estrutura_com_op

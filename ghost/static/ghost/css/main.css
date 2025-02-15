@@ -54,6 +54,7 @@ input[type="month"] {
 	padding: 1rem;
 	word-wrap: break-word;
 	overflow-wrap: break-word;
+	margin-top: 0.5rem;
 }
 
 label {
@@ -94,8 +95,6 @@ li {
 	flex-flow: column;
 	padding-top: 2rem;
 	gap: 1rem;
-	justify-content: center;
-	justify-items: center
 }
 
 @keyframes zoom-tela-principal {
@@ -196,10 +195,10 @@ li {
 }
 
 .botao-padrao {
-	width: 10rem;
+	width: fit-content;
 	font-size: 2rem;
 	border-radius: 20px;
-	padding: 0.2rem;
+	padding: 0.2rem 1rem;
 	font-family: inherit;
 	transition: all 300ms ease-in-out;
 	place-self: center;

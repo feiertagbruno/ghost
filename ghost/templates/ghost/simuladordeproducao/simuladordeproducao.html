@@ -1,0 +1,42 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'ghost/css/simulador_de_producao.css' %}">
+{% endblock css %}
+
+{% block content %}
+
+<form id="form-multi-id" class="form form-simulador-de-producao" method="post" action="{% url "ghost:multiestruturas" %}">
+	{% csrf_token %}
+	<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
+
+	<span class="titulo-form borda-dupla-inferior">Simulador de Produção</span>
+
+	<div class="flex-flow-row linha-form hidden">
+			<label for="csv-plan">Arquivo CSV - Planejamento Produção: </label>
+			<input type="file" name="csv-plan" id="csv-plan-id"></input>
+	</div>
+
+	<div class="flex-flow-row linha-form campos-simulador-producao">
+		<div class="no-wrap">
+			<label for="codigo-produto-id">Código do Produto:</label>
+			<input type="text" name="codigo-produto" id="codigo-produto-id">
+		</div>
+		<div class="no-wrap">
+			<label for="data-producao-id">Data da Produção:</label>
+			<input type="date" name="data-producao" id="data-producao" value="{{maior_data}}">
+		</div>
+		<div class="no-wrap">
+			<label for="quantidade-id">Quantidade:</label>
+			<input type="number" step="1" name="quantidade" id="quantidade-id">
+		</div>
+	</div>
+	<button id="botao-multi-simples" class="botao-padrao" type="submit">Adicionar Produção</button>
+</form>
+<div class="box-tabela-simulador">
+	{{simulador}}
+</div>
+<script src="{% static "ghost/js/simuladorDeProducao.js" %}"></script>
+
+{% endblock content %}

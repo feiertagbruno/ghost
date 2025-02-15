@@ -11,7 +11,7 @@ from ghost.queries import *
 from django.conf import settings
 from django.contrib import messages
 from ghost.models import Processamento
-from ghost.utils.funcs import get_last_day_of_month
+from ghost.utils.funcs import extrai_data_fechamento_de_string_yyyy_mm
 
 
 def tratamento_data_referencia(data_referencia):
@@ -159,7 +159,6 @@ def explode_extrutura(codigo, data_referencia = None, engine = None, abre_todos_
 
 	return estrutura, todos_os_codigos
 
-	# FIM explode_extrutura
 
 
 
@@ -219,9 +218,15 @@ def calcula_custo_total(codigo, descricao, data_referencia_var, estrutura:pd.Dat
 						nomes_colunas, custos_totais_produto = pd.DataFrame()):
 	coluna_custos_estrutura, coluna_custos_alternativos, nova_coluna_custo_total, nova_coluna_comentario = nomes_colunas
 	
+	try:
+		tipo = estrutura.loc[estrutura["codigo_pai"] == codigo, "tipo_pai"].values[0]
+	except:
+		_, tipo = get_descricao_produto(codigo)
+	
 	if custos_totais_produto.empty:
 		custos_totais_produto = pd.DataFrame([{
 			"codigo_original": codigo,
+			"tipo": tipo,
 			"descricao_cod_original": descricao,
 			"data_referencia": pd.to_datetime(data_referencia_var, format="%d/%m/%Y"),
 			nova_coluna_custo_total: None,
@@ -229,7 +234,7 @@ def calcula_custo_total(codigo, descricao, data_referencia_var, estrutura:pd.Dat
 		}])
 	elif custos_totais_produto[custos_totais_produto["codigo_original"] == codigo].empty:
 		custos_totais_produto.loc[len(custos_totais_produto)] = [
-			codigo, descricao, data_referencia_var
+			codigo, tipo, descricao, data_referencia_var
 		]
 
 	comentario = f"{codigo}\nData Referência: {datetime.strftime(data_referencia_var,'%d/%m/%Y')}\n\n"
@@ -319,10 +324,16 @@ def busca_custos_medios(str_codigos, data_referencia, engine):
 
 
 def get_descricao_produto(codigo, engine = None):
-	return pd.read_sql(
+	if not engine:
+		engine = get_engine()
+
+	resultado = pd.read_sql(
 			text(get_query_busca_descricao_produto()),
 			engine, params={"codigo":codigo}
-		)["descricao"].values[0]
+		)
+	descricao = resultado["descricao"].values[0]
+	tipo = resultado["tipo"].values[0]
+	return descricao, tipo
 
 
 
@@ -361,7 +372,7 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 	data_referencia = tratamento_data_referencia(data_referencia)
 	if data_std:
 		if isinstance(data_std, str):
-			data_std = get_last_day_of_month(data_std)
+			data_std = extrai_data_fechamento_de_string_yyyy_mm(data_std)
 
 	estrutura, todos_os_codigos = explode_extrutura(
 		codigo, 
@@ -380,8 +391,9 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 
 	try:
 		descricao = estrutura.loc[estrutura["codigo_pai"] == codigo, "descricao_pai"].values[0]
+		tipo_original = estrutura.loc[estrutura["codigo_pai"] == codigo, "tipo_pai"].values[0]
 	except:
-		descricao = get_descricao_produto(codigo, engine)
+		descricao, tipo_original = get_descricao_produto(codigo, engine)
 
 	# ÚLTIMA COMPRA
 	custos_ultima_compra = busca_custos_ultima_compra(
@@ -389,12 +401,12 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 		data_std if data_std else data_referencia, 
 		engine
 	)
-	custos_ultima_compra = custos_ultima_compra[
-		(custos_ultima_compra["ult_compra_custo_utilizado"] != 0) & 
-		(custos_ultima_compra["ult_compra_custo_utilizado"].notnull())
-	]
 	# TRAZER CUSTOS OLHANDO PARA FRENTE NO CASO DO BOMXOPSTD
 	if data_std:
+		custos_ultima_compra = custos_ultima_compra[ #pega produtos com preço zerado
+			(custos_ultima_compra["ult_compra_custo_utilizado"] != 0) |
+			(custos_ultima_compra["ult_compra_custo_utilizado"].notnull())
+		]
 		codigos_nao_encontrados = todos_os_codigos[
 			~todos_os_codigos["todos_os_codigos"].isin(custos_ultima_compra["insumo"])
 		]
@@ -405,8 +417,8 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 				data_std if data_std else data_referencia, 
 				engine
 			)
-			custos_ultima_compra = pd.concat([custos_ultima_compra,codigos_nao_encontrados],axis=0, ignore_index=True)
-			codigos_nao_encontrados = None
+			if not codigos_nao_encontrados.empty:
+				custos_ultima_compra = pd.concat([custos_ultima_compra,codigos_nao_encontrados],axis=0, ignore_index=True)
 
 	###
 	estrutura = traz_custos_por_produto(estrutura, custos_ultima_compra, 
@@ -439,9 +451,26 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 				data_std if data_std else data_referencia, 
 				engine
 			)
-			custos_ultimo_fechamento = pd.concat(
-				[custos_ultimo_fechamento,codigos_nao_encontrados],axis=0, ignore_index=True
+			if not codigos_nao_encontrados.empty:
+				custos_ultimo_fechamento = pd.concat(
+					[custos_ultimo_fechamento,codigos_nao_encontrados],axis=0, ignore_index=True
+				)
+		codigos_nao_encontrados = todos_os_codigos[
+			~todos_os_codigos["todos_os_codigos"].isin(custos_ultimo_fechamento["insumo"])
+		]
+		if not codigos_nao_encontrados.empty:
+			codigos_nao_encontrados_str = forma_string_codigos(codigos_nao_encontrados["todos_os_codigos"])
+			codigos_nao_encontrados = busca_custos_medios(
+				codigos_nao_encontrados_str, data_referencia, engine
 			)
+			if not codigos_nao_encontrados.empty:
+				codigos_nao_encontrados = codigos_nao_encontrados.rename(columns={
+					"medio_atual_custo_utilizado": "fechamento_custo_utilizado",
+					"comentario_custo_medio": "comentario_fechamento",
+				})
+				custos_ultimo_fechamento = pd.concat(
+					[custos_ultimo_fechamento,codigos_nao_encontrados],axis=0, ignore_index=True
+				)
 
 	###
 	
@@ -472,6 +501,7 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 	
 	estrutura["codigo_original"] = str(codigo)
 	estrutura["descricao_cod_original"] = str(descricao)
+	estrutura["tipo_original"] = str(tipo_original)
 
 	return estrutura, custos_totais_produto
 	
@@ -486,6 +516,7 @@ def gerar_relatorio_excel_estruturas_simples(estrutura, custos_totais_produtos, 
 
 	nomes_das_colunas = {
 		'codigo_original':"Cód Original",
+		"tipo_original": "Tipo Cód Orig",
 		'descricao_cod_original':"Desc Orig",
 		'codigo_pai':"Código Pai", 
 		'descricao_pai':"Desc Pai", 
@@ -510,6 +541,7 @@ def gerar_relatorio_excel_estruturas_simples(estrutura, custos_totais_produtos, 
 
 	ws.append([
 		nomes_das_colunas["codigo_original"],
+		nomes_das_colunas["tipo_original"],
 		nomes_das_colunas["descricao_cod_original"],
 		nomes_das_colunas["codigo_pai"],
 		nomes_das_colunas["descricao_pai"],
@@ -530,40 +562,59 @@ def gerar_relatorio_excel_estruturas_simples(estrutura, custos_totais_produtos, 
 
 	for i, row in estrutura.iterrows():
 		l = i+2
-		ws.cell(l, 1, row["codigo_original"])
-		ws.cell(l, 2, row["descricao_cod_original"])
-		ws.cell(l, 3, row["codigo_pai"])
-		ws.cell(l, 4, row["descricao_pai"])
-		ws.cell(l, 5, row["tipo_pai"])
-		ws.cell(l, 6, row["insumo"])
-		ws.cell(l, 7, row["descricao_insumo"])
-		ws.cell(l, 8, row["quant_utilizada"])
-		ws.cell(l, 9, row["tipo_insumo"])
-		ws.cell(l,10, row["origem"])
-		ws.cell(l,11, row["alternativos"])
+		c = 1
+		ws.cell(l, c, row["codigo_original"])
+		c += 1
+		ws.cell(l, c, row["tipo_original"])
+		c += 1
+		ws.cell(l, c, row["descricao_cod_original"])
+		c += 1
+		ws.cell(l, c, row["codigo_pai"])
+		c += 1
+		ws.cell(l, c, row["descricao_pai"])
+		c += 1
+		ws.cell(l, c, row["tipo_pai"])
+		c += 1
+		ws.cell(l, c, row["insumo"])
+		c += 1
+		ws.cell(l, c, row["descricao_insumo"])
+		c += 1
+		ws.cell(l, c, row["quant_utilizada"])
+		c += 1
+		ws.cell(l, c, row["tipo_insumo"])
+		c += 1
+		ws.cell(l, c, row["origem"])
+		c += 1
+		ws.cell(l, c, row["alternativos"])
 
+		c += 1
 		comm = row["comentario_ultima_compra"]
-		ws.cell(l,12, row["ult_compra_custo_utilizado"])\
+		ws.cell(l, c, row["ult_compra_custo_utilizado"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
+		c += 1
 		comm = row["comentario_ultima_compra_alt"]
-		ws.cell(l,13, row["ult_compra_custo_utilizado_alt"])\
+		ws.cell(l, c, row["ult_compra_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
+		c += 1
 		comm = row["comentario_fechamento"]
-		ws.cell(l,14, row["fechamento_custo_utilizado"])\
+		ws.cell(l, c, row["fechamento_custo_utilizado"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
+		c += 1
 		comm = row["comentario_fechamento_alt"]
-		ws.cell(l,15, row["fechamento_custo_utilizado_alt"])\
+		ws.cell(l, c, row["fechamento_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
+		c += 1
 		comm = row["comentario_custo_medio"]
-		ws.cell(l,16, row["medio_atual_custo_utilizado"])\
+		ws.cell(l, c, row["medio_atual_custo_utilizado"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 		
+		c += 1
 		comm = row["comentario_custo_medio_alt"]
-		ws.cell(l,17, row["medio_atual_custo_utilizado_alt"])\
+		ws.cell(l, c, row["medio_atual_custo_utilizado_alt"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
 	colunas_para_ocultar = {
@@ -583,10 +634,11 @@ def gerar_relatorio_excel_estruturas_simples(estrutura, custos_totais_produtos, 
 				adjusted_width = max_lengths[chave] + 4
 				ws.column_dimensions[letra_coluna].width = adjusted_width
 				break
-
+	
+	col = get_column_letter(ws.max_column)
 	tab = Table(
 		displayName="tabela_estruturas",
-		ref=f"A1:Q{len(estrutura) + 1}"
+		ref=f"A1:{col}{len(estrutura) + 1}"
 	)
 	style = TableStyleInfo(
 		name="TableStyleMedium2",
@@ -599,29 +651,46 @@ def gerar_relatorio_excel_estruturas_simples(estrutura, custos_totais_produtos, 
 	ws.add_table(tab)
 
 	ws2 = wb.create_sheet("Consolidado",0)
-	ws2.append(["Data de Referência", "Código","Descrição","Últimas Entradas","Último Fechamento","Custo Médio"])
+	ws2.append([
+		"Data de Referência", 
+		"Código",
+		"Tipo",
+		"Descrição",
+		"Últimas Entradas",
+		"Último Fechamento",
+		"Custo Médio"
+	])
 
 	for i, row in custos_totais_produtos.iterrows():
 		l = i+2
-		ws2.cell(l, 1, data_referencia).number_format = "DD/MM/YYYY"
-		ws2.cell(l, 2, row["codigo_original"])
-		ws2.cell(l, 3, row["descricao_cod_original"])
+		c = 1
+		ws2.cell(l, c, data_referencia).number_format = "DD/MM/YYYY"
+		c += 1
+		ws2.cell(l, c, row["codigo_original"])
+		c += 1
+		ws2.cell(l, c, row["tipo"])
+		c += 1
+		ws2.cell(l, c, row["descricao_cod_original"])
 
+		c += 1
 		comm = row["comentario_ultima_compra"]
-		ws2.cell(l, 4, row["custo_total_ultima_compra"])\
+		ws2.cell(l, c, row["custo_total_ultima_compra"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
+		c += 1
 		comm = row["comentario_ultimo_fechamento"]
-		ws2.cell(l, 5, row["custo_total_ultimo_fechamento"])\
+		ws2.cell(l, c, row["custo_total_ultimo_fechamento"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
+		c += 1
 		comm = row["comentario_custo_medio"]
-		ws2.cell(l, 6, row["total_pelo_custo_medio"])\
+		ws2.cell(l, c, row["total_pelo_custo_medio"])\
 			.comment = Comment(comm, "", (comm.count("\n") + 2) * 20, max(len(lin) for lin in comm.split("\n")) * 8) if comm else None
 
+	col = get_column_letter(ws2.max_column)
 	tab = Table(
 		displayName="tabela_consolidada",
-		ref=f"A1:F{len(custos_totais_produtos) + 1}"
+		ref=f"A1:{col}{len(custos_totais_produtos) + 1}"
 	)
 	tab.tableStyleInfo = style
 	ws2.add_table(tab)
@@ -641,6 +710,8 @@ def gerar_multiestruturas(
 
 	if not engine:
 		engine = get_engine()
+	
+	abre_todos_os_PIs = request.POST.get("explodir-pis")
 
 	compilado_estruturas = pd.DataFrame()
 	compilado_custos_totais = pd.DataFrame()
@@ -667,7 +738,7 @@ def gerar_multiestruturas(
 		################
 
 		if len(produto) == 7 or len(produto) == 15:
-			estrutura, custos_totais_produto = estrutura_simples(produto, data_referencia, engine)
+			estrutura, custos_totais_produto = estrutura_simples(produto, data_referencia, engine,abre_todos_os_PIs)
 			compilado_estruturas = pd.concat([compilado_estruturas, estrutura])
 			compilado_custos_totais = pd.concat([compilado_custos_totais, custos_totais_produto])
 		else:

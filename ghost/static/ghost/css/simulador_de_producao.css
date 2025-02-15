@@ -1,0 +1,12 @@
+.form-simulador-de-producao {
+	width: 90%;
+}
+
+.campos-simulador-producao {
+	margin-left: 5.8%;
+}
+
+.box-tabela-simulador {
+	width: 90%;
+	overflow: auto;
+}

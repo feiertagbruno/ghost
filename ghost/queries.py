@@ -264,7 +264,10 @@ GROUP BY op, codigo_original, data_referencia,
 """
 
 def get_query_busca_descricao_produto():
-	return "SELECT TOP 1 TRIM(B1_DESC) descricao FROM VW_MN_SB1 B1 WHERE B1.D_E_L_E_T_ <> '*' AND B1_COD = :codigo"
+	return """
+	SELECT TOP 1 TRIM(B1_DESC) descricao, TRIM(B1_TIPO) tipo 
+	FROM VW_MN_SB1 B1 WHERE B1.D_E_L_E_T_ <> '*' AND B1_COD = :codigo
+"""
 
 def get_query_numeros_op_por_periodo():
 	return """
@@ -423,4 +426,15 @@ WHERE B9.D_E_L_E_T_ <> '*'
 			AND B9A.B9_LOCAL IN ( SELECT value FROM string_split(@ARMAZENS, ',') )
 	)
 	ORDER BY insumo
+"""
+
+def get_query_estoque_atual():
+	return """
+SELECT
+	TRIM(B2_COD) codigo,
+	B2_LOCAL armazem,
+	ISNULL(B2_QATU,0) quant
+FROM VW_MN_SB2 B2
+WHERE B2.D_E_L_E_T_ <> '*'
+	AND B2_QATU <> 0
 """
