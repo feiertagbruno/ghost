@@ -1,6 +1,6 @@
 from django.conf import settings
-from ghost.functions.estruturas import (
-	get_engine, tratamento_data_referencia, forma_string_codigos,
+from ghost.views.estruturas import (
+	forma_string_codigos,
 	busca_custos_ultima_compra, busca_custos_ultimo_fechamento, busca_custos_medios,
 	traz_custos_por_produto, calcula_custo_total, get_descricao_produto,
 	busca_compra_mais_antiga_por_data_ref, busca_menor_fechamento_por_data_ref
@@ -16,10 +16,13 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill
 from os import path
-from ghost.utils.funcs import extrai_data_fechamento_de_string_yyyy_mm
+from ghost.utils.funcs import (
+	extrai_data_fechamento_de_string_yyyy_mm, get_descricao_produto, get_engine,
+	tratamento_data_referencia
+)
 
 
-def get_info_op(numero_op, engine = None, data_std = None):
+def get_info_op(numero_op, engine = None, data_std = None, considera_frete = True):
 
 	if not engine:
 		engine = get_engine()
@@ -34,6 +37,7 @@ def get_info_op(numero_op, engine = None, data_std = None):
 	codigo = resultado["codigo_original"].values[0]
 	data_referencia = resultado["data_referencia"].values[0]
 	data_referencia = tratamento_data_referencia(data_referencia)
+	data_para_custos = tratamento_data_referencia(resultado["data_encerramento_op"].values[0])
 	if data_std:
 		if isinstance(data_std, str):
 			data_std = extrai_data_fechamento_de_string_yyyy_mm(date_str=data_std)
@@ -45,7 +49,8 @@ def get_info_op(numero_op, engine = None, data_std = None):
 	custos_ultima_compra = busca_custos_ultima_compra(
 		str_codigos=str_codigos, 
 		data_referencia=data_std if data_std else data_referencia, 
-		engine=engine
+		engine=engine,
+		considera_frete=considera_frete
 	)
 	# TRAZER CUSTOS OLHANDO PARA FRENTE NO CASO DO BOMXOPSTD
 	if data_std:
@@ -59,9 +64,10 @@ def get_info_op(numero_op, engine = None, data_std = None):
 		if not codigos_nao_encontrados.empty:
 			codigos_nao_encontrados_str = forma_string_codigos(codigos_nao_encontrados["todos_os_codigos"])
 			codigos_nao_encontrados = busca_compra_mais_antiga_por_data_ref(
-				codigos_nao_encontrados_str, 
-				data_std if data_std else data_referencia, 
-				engine
+				str_codigos=codigos_nao_encontrados_str, 
+				data_referencia=data_std if data_std else data_referencia, 
+				engine=engine,
+				considera_frete=considera_frete
 			)
 			if not codigos_nao_encontrados.empty:
 				custos_ultima_compra = pd.concat([custos_ultima_compra,codigos_nao_encontrados],axis=0, ignore_index=True)
@@ -121,6 +127,15 @@ def get_info_op(numero_op, engine = None, data_std = None):
 		["fechamento_custo_utilizado", "", "custo_total_ult_fechamento_op", "comentario_fechamento_op"],
 		custos_totais_op
 	)
+
+	if not considera_frete:
+		resultado["fechamento_custo_utilizado"] = \
+			resultado.apply(
+				lambda row: row["ult_compra_custo_utilizado"] if \
+					row["ult_compra_custo_utilizado"] not in [0,''] and row["tipo_insumo"] != 'PI' \
+						else row["fechamento_custo_utilizado"] ,
+				axis=1
+			)
 
 	# CUSTO MÉDIO ATUAL
 	custos_medios = busca_custos_medios(str_codigos, data_referencia, engine)

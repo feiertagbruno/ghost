@@ -1,48 +1,22 @@
-from dotenv import load_dotenv
-from os import environ, path
-from sqlalchemy import create_engine, text
+from django.conf import settings
+from django.contrib import messages
+
+from os import path
+from sqlalchemy import text
 from datetime import datetime
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.comments import Comment
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
+from typing import Literal
+
 from ghost.queries import *
-from django.conf import settings
-from django.contrib import messages
 from ghost.models import Processamento
-from ghost.utils.funcs import extrai_data_fechamento_de_string_yyyy_mm
-
-
-def tratamento_data_referencia(data_referencia):
-	if not data_referencia:
-		data_referencia = datetime.today().date()
-	elif type(data_referencia) == str:
-		if data_referencia.count("-") == 2:
-			data_referencia = datetime.strptime(data_referencia, "%Y-%m-%d").date()
-		elif data_referencia.count("/") == 2:
-			data_referencia = datetime.strptime(data_referencia, "%d/%m/%Y").date()
-		else:
-			data_referencia = datetime.strptime(data_referencia, "%Y%m%d").date()
-	return data_referencia
-
-
-
-
-def get_engine():
-	load_dotenv()
-
-	SERVER = environ.get("SERVER")
-	DB = environ.get("DB")
-	USER = environ.get("USER")
-	PWD = environ.get("PWD")
-	DRIVER = "ODBC Driver 18 for SQL Server"
-
-	connection_string = f"mssql+pyodbc://{USER}:{PWD}@{SERVER}/{DB}?driver={DRIVER}&TrustServerCertificate=yes"
-
-	engine = create_engine(connection_string)
-	
-	return engine
+from ghost.utils.funcs import (
+	extrai_data_fechamento_de_string_yyyy_mm, get_descricao_produto, get_engine,
+	tratamento_data_referencia
+)
 
 
 
@@ -101,9 +75,12 @@ def acrescenta_alternativos(estrutura: pd.DataFrame, engine, abre_todos_os_PIs =
 
 
 
-def busca_custos_ultima_compra(str_codigos, data_referencia, engine):
+def busca_custos_ultima_compra(str_codigos, data_referencia, engine, considera_frete=True):
 
-	query = get_query_ultima_compra_produtos()
+	if considera_frete:
+		query = get_query_ultima_compra_produtos()
+	else:
+		query = get_query_ultima_compra_sem_frete()
 
 	return pd.read_sql(text(query), engine, params={
 		"codigos":str_codigos,
@@ -115,7 +92,13 @@ def busca_custos_ultima_compra(str_codigos, data_referencia, engine):
 
 
 
-def explode_extrutura(codigo, data_referencia = None, engine = None, abre_todos_os_PIs = True):
+def explode_estrutura(
+		codigo, 
+		data_referencia = None,
+		engine = None, 
+		abre_todos_os_PIs = True, 
+		solicitante: Literal["multiestruturas","simulador"] = "multiestruturas"
+	):
 
 	data_referencia = tratamento_data_referencia(data_referencia)
 	
@@ -136,8 +119,6 @@ def explode_extrutura(codigo, data_referencia = None, engine = None, abre_todos_
 	while tem_PI:
 		
 		for codigo_PI in filtro_PI["insumo"]:
-			if codigo_PI == 'MPBPJ0000000586':
-				a = ''
 			resultado = get_estrutura_produto(codigo_PI, data_referencia, engine)
 			estrutura.loc[estrutura["insumo"] == codigo_PI, "verificado"] = True
 			estrutura = pd.concat([estrutura,resultado],ignore_index=True)
@@ -155,7 +136,10 @@ def explode_extrutura(codigo, data_referencia = None, engine = None, abre_todos_
 	estrutura["quant_utilizada"] = estrutura.groupby("insumo")["quant_utilizada"].transform("sum")
 	estrutura.drop_duplicates(subset="insumo", inplace=True)
 	
-	estrutura, todos_os_codigos = acrescenta_alternativos(estrutura, engine, abre_todos_os_PIs)
+	if solicitante == "multiestruturas":
+		estrutura, todos_os_codigos = acrescenta_alternativos(estrutura, engine, abre_todos_os_PIs)
+	elif solicitante == "simulador":
+		estrutura, todos_os_codigos = acrescenta_alternativos_modelo_simulador(estrutura, engine)
 
 	return estrutura, todos_os_codigos
 
@@ -323,26 +307,14 @@ def busca_custos_medios(str_codigos, data_referencia, engine):
 
 
 
-def get_descricao_produto(codigo, engine = None):
-	if not engine:
-		engine = get_engine()
-
-	resultado = pd.read_sql(
-			text(get_query_busca_descricao_produto()),
-			engine, params={"codigo":codigo}
-		)
-	descricao = resultado["descricao"].values[0]
-	tipo = resultado["tipo"].values[0]
-	return descricao, tipo
-
-
-
-
-def busca_compra_mais_antiga_por_data_ref(str_codigos, data_referencia, engine):
+def busca_compra_mais_antiga_por_data_ref(str_codigos, data_referencia, engine,considera_frete=True):
 	if not engine:
 		engine = get_engine()
 	
-	query = get_query_compra_mais_antiga()
+	if considera_frete:
+		query = get_query_compra_mais_antiga()
+	else:
+		query = get_query_compra_mais_antiga_sem_frete()
 
 	return pd.read_sql(text(query), engine, params={
 		"produtos": str_codigos,
@@ -365,7 +337,9 @@ def busca_menor_fechamento_por_data_ref(str_codigos, data_referencia, engine):
 
 
 
-def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs = True, data_std = None):
+def estrutura_simples(codigo, data_referencia, engine = None, 
+					  abre_todos_os_PIs = True, data_std = None, 
+					  considera_frete=True, traz_preco_futuro=False):
 
 	if not engine:
 		engine = get_engine()
@@ -374,7 +348,7 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 		if isinstance(data_std, str):
 			data_std = extrai_data_fechamento_de_string_yyyy_mm(data_std)
 
-	estrutura, todos_os_codigos = explode_extrutura(
+	estrutura, todos_os_codigos = explode_estrutura(
 		codigo, 
 		data_std if data_std else data_referencia, 
 		engine, 
@@ -397,12 +371,13 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 
 	# ÚLTIMA COMPRA
 	custos_ultima_compra = busca_custos_ultima_compra(
-		str_codigos, 
-		data_std if data_std else data_referencia, 
-		engine
+		str_codigos=str_codigos, 
+		data_referencia=data_std if data_std else data_referencia, 
+		engine=engine,
+		considera_frete=considera_frete
 	)
 	# TRAZER CUSTOS OLHANDO PARA FRENTE NO CASO DO BOMXOPSTD
-	if data_std:
+	if data_std or traz_preco_futuro:
 		custos_ultima_compra = custos_ultima_compra[ #pega produtos com preço zerado
 			(custos_ultima_compra["ult_compra_custo_utilizado"] != 0) |
 			(custos_ultima_compra["ult_compra_custo_utilizado"].notnull())
@@ -413,9 +388,10 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 		if not codigos_nao_encontrados.empty:
 			codigos_nao_encontrados_str = forma_string_codigos(codigos_nao_encontrados["todos_os_codigos"])
 			codigos_nao_encontrados = busca_compra_mais_antiga_por_data_ref(
-				codigos_nao_encontrados_str, 
-				data_std if data_std else data_referencia, 
-				engine
+				str_codigos=codigos_nao_encontrados_str, 
+				data_referencia=data_std if data_std else data_referencia, 
+				engine=engine,
+				considera_frete=considera_frete
 			)
 			if not codigos_nao_encontrados.empty:
 				custos_ultima_compra = pd.concat([custos_ultima_compra,codigos_nao_encontrados],axis=0, ignore_index=True)
@@ -440,7 +416,7 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 	)
 
 	# TRAZER CUSTOS OLHANDO PARA FRENTE NO CASO DO BOMXOPSTD
-	if data_std:
+	if data_std or traz_preco_futuro:
 		codigos_nao_encontrados = todos_os_codigos[
 			~todos_os_codigos["todos_os_codigos"].isin(custos_ultimo_fechamento["insumo"])
 		]
@@ -485,6 +461,17 @@ def estrutura_simples(codigo, data_referencia, engine = None, abre_todos_os_PIs 
 			"comentario_ultimo_fechamento"
 		],
 		custos_totais_produto)
+	
+	# traz os custos de ultima entrada das matérias primas sem o frete para a coluna de fechamento
+	# que será usada na tabela dinâmica do Luan
+	if not considera_frete and data_std:
+		estrutura["fechamento_custo_utilizado"] = \
+			estrutura.apply(
+				lambda row: row["ult_compra_custo_utilizado"] if \
+					row["ult_compra_custo_utilizado"] not in [0,''] and row["tipo_insumo"] != 'PI' \
+						else row["fechamento_custo_utilizado"] ,
+				axis=1
+			)
 	
 	# MÉDIO ATUAL
 	custos_medios = busca_custos_medios(str_codigos, data_referencia, engine)
@@ -705,7 +692,7 @@ def gerar_relatorio_excel_estruturas_simples(estrutura, custos_totais_produtos, 
 
 
 def gerar_multiestruturas(
-		request, produtos, data_referencia, engine = None
+		request, produtos, data_referencia, engine = None, considera_frete=True, traz_preco_futuro=False
 	):
 
 	if not engine:
@@ -738,7 +725,14 @@ def gerar_multiestruturas(
 		################
 
 		if len(produto) == 7 or len(produto) == 15:
-			estrutura, custos_totais_produto = estrutura_simples(produto, data_referencia, engine,abre_todos_os_PIs)
+			estrutura, custos_totais_produto = estrutura_simples(
+				codigo=produto, 
+				data_referencia=data_referencia, 
+				engine=engine,
+				abre_todos_os_PIs=abre_todos_os_PIs,
+				considera_frete=considera_frete,
+				traz_preco_futuro=traz_preco_futuro
+			)
 			compilado_estruturas = pd.concat([compilado_estruturas, estrutura])
 			compilado_custos_totais = pd.concat([compilado_custos_totais, custos_totais_produto])
 		else:
@@ -748,3 +742,22 @@ def gerar_multiestruturas(
 	compilado_estruturas = compilado_estruturas.reset_index(drop=True)
 
 	return [request, compilado_estruturas, compilado_custos_totais]
+
+
+
+
+def acrescenta_alternativos_modelo_simulador(estrutura: pd.DataFrame, engine):
+
+	todos_os_codigos = estrutura[["insumo"]].drop_duplicates(subset="insumo")\
+		.rename(columns={"insumo":"todos_os_codigos"})
+	
+	str_codigos = forma_string_codigos(todos_os_codigos["todos_os_codigos"])
+
+	query = get_query_alternativos()
+
+	resultado = pd.read_sql(text(query), engine, params={
+		"codigos":str_codigos,
+	}).rename(columns={"prodori": "insumo"})
+	estrutura = pd.concat([estrutura, resultado], ignore_index=True )
+
+	return estrutura, todos_os_codigos

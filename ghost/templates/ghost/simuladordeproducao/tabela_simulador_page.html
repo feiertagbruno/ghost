@@ -1,0 +1,34 @@
+<div class="box-tabela-simulador" id="box-tabela-simulador-id">
+	<div class="titulo-tabela">Simulador de Produção</div>
+
+	{% comment %} FORM DAS CHECKBOX DOS ARMAZÉNS {% endcomment %}
+	<form 
+		id="form-tabela-simulador-id" 
+		class="form-tabela" 
+		hx-post="{% url "ghost:reprocessar-tabela" %}"
+		hx-target="#tabela-simulador-id"
+		hx-swap="outerHtml"
+	>
+		<textarea name="tabela-simulador-html" id="tabela-simulador-html-id" class="hidden"></textarea>
+		<div class="parte-superior-div-simulador">
+			<div class="box-armazens">
+				{% for arm in armazens %}
+				<div class="armazem-checkbox-div">
+					<label for="{{arm}}">{{arm}}</label>
+					<input type="checkbox" id="{{arm}}"
+					value="{{arm}}"
+					class="armazem-checkbox"
+					name = "armazem-checkbox"
+					{% if arm in armazens_visiveis %}checked{% endif %}
+					>
+				</div>
+				{% endfor %}
+			</div>
+			{% csrf_token %}
+			<input type="hidden" name="codigo-aleatorio" id="codigo-aleatorio-id" value="{{codigo_aleatorio}}">
+			<button class="botao-pequeno" type="submit">Reprocessar</button>
+		</div>
+	</form>
+
+	{% include "ghost/simuladordeproducao/tabela_simulador.html" %}
+</div>

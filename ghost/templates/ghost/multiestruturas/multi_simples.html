@@ -7,25 +7,40 @@
 	{% csrf_token %}
 	<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
 
+	{% comment %} TÍTULO {% endcomment %}
 	<span class="titulo-form borda-dupla-inferior">Multiestruturas</span>
+
+	{% comment %} DATA {% endcomment %}
 	<div class="flex-flow-row linha-form">
 		<label for="data-referencia-id">Data de Referência: </label>
 		<input type="date" name="data-referencia" id="data-referencia-id" value="{{data_referencia}}"></input>
 	</div>
+
+	{% comment %} CHECKBOX EXPLODIR PIS {% endcomment %}
+	<div class="flex-flow-row linha-form">
+		<label for="explodir-pis-id">Explodir PIs: </label>
+		<input type="checkbox" name="explodir-pis" id="explodir-pis-id" checked>
+		<span id="texto-checkbox-explodir-pis" class="low-emphasis">    (Serão explodidos todos os PIs)</span>
+	</div>
+
+	{% comment %} CHECKBOX CONSIDERA FRETE {% endcomment %}
+	<div class="flex-flow-row linha-form">
+		<label for="considera-frete-id">Considerar Valores de Frete: </label>
+		<input type="checkbox" name="considera-frete" id="considera-frete-id" checked>
+	</div>
+
+	{% comment %} CHECKBOX TRAZ PREÇOS DO FUTURO {% endcomment %}
+	<div class="flex-flow-row linha-form hidden">
+		<label for="traz-preco-futuro-id">Trazer preços futuros à Data de Referência caso não encontre no passado: </label>
+		<input type="checkbox" name="traz-preco-futuro" id="traz-preco-futuro-id">
+	</div>
+
+	{% comment %} CAMPO CODIGOS PRODUTOS {% endcomment %}
 	<div class="flex-flow-row linha-form">
 		<label for="codigos-produtos-id">Códigos dos Produtos: </label>
 		<textarea class="codigos-produtos" name="codigos-produtos" id="codigos-produtos-id"></textarea>
 	</div>
-	<div class="flex-flow-row linha-form">
-		<label for="explodir-pis-id">Explodir PIs: </label>
-		<input 
-			type="checkbox" 
-			name="explodir-pis" 
-			id="explodir-pis-id" 
-			checked
-		>
-		<span id="texto-checkbox-explodir-pis" class="low-emphasis">    (Serão explodidos todos os PIs)</span>
-	</div>
+
 	<button id="botao-multi-simples" class="botao-padrao" type="submit">Iniciar</button>
 </form>
 <script src="{% static "ghost/js/multiSimples.js" %}"></script>

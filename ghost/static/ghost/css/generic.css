@@ -30,3 +30,15 @@
 .no-wrap {
 	white-space: nowrap;
 }
+
+.botao-pequeno {
+	border-radius: 5px;
+	padding: .3rem .5rem;
+	transition: all 300ms ease-in-out;
+}
+
+.botao-pequeno:hover {
+	cursor: pointer;
+	background-color: rgba(192,0,0,0.8);
+	color: wheat;
+}

@@ -1,13 +1,13 @@
 from django.shortcuts import render,redirect
 from django.urls import reverse
 from datetime import datetime
-from ghost.functions.estruturas import (
+from ghost.views.estruturas import (
 	gerar_relatorio_excel_estruturas_simples, gerar_multiestruturas,
-	estrutura_simples, get_engine, tratamento_data_referencia
+	estrutura_simples
 )
 from django.contrib import messages
 from django.http import FileResponse
-from ghost.functions.OPs import (
+from ghost.views.OPs import (
 	get_info_op, combina_estrutura_e_op, combina_custos_totais_estrutura_e_op, 
 	gerar_relatorio_excel_bomxop_simples, get_numeros_OPs_por_periodo,
 	get_numero_op_pelo_produto
@@ -16,7 +16,10 @@ import pandas as pd
 from ghost.models import Processamento
 from django.http import JsonResponse
 import json
-from ghost.utils.funcs import extrai_data_fechamento_de_string_yyyy_mm
+from ghost.utils.funcs import (
+	extrai_data_fechamento_de_string_yyyy_mm, get_engine,
+	tratamento_data_referencia
+)
 
 pd.set_option("future.no_silent_downcasting", True)
 
@@ -44,7 +47,16 @@ def multiestruturas(request):
 	data_referencia = request.POST.get("data-referencia")
 	if not data_referencia: data_referencia = datetime.today().date()
 
-	request, compilado_estruturas, compilado_custos_totais = gerar_multiestruturas(request, produtos_filtrados, data_referencia)
+	considera_frete = request.POST.get("considera-frete")
+	traz_preco_futuro = request.POST.get("traz-preco-futuro")
+
+	request, compilado_estruturas, compilado_custos_totais = gerar_multiestruturas(
+		request=request, 
+		produtos=produtos_filtrados, 
+		data_referencia=data_referencia,
+		considera_frete=considera_frete,
+		traz_preco_futuro=traz_preco_futuro
+	)
 
 	if compilado_custos_totais.empty:
 		messages.info(request, "Sua busca retornou sem resultados")
@@ -62,7 +74,9 @@ def multiestruturas(request):
 		processamento_atual.mensagem2 = "Compondo relatório em Excel"
 		processamento_atual.save()
 
-	caminho_relatorio_excel = gerar_relatorio_excel_estruturas_simples(compilado_estruturas, compilado_custos_totais, data_referencia)
+	caminho_relatorio_excel = gerar_relatorio_excel_estruturas_simples(
+		compilado_estruturas, compilado_custos_totais, data_referencia
+	)
 
 	compilado_custos_totais["data_referencia"] = compilado_custos_totais["data_referencia"].dt.strftime("%d/%m/%Y")
 
@@ -138,7 +152,7 @@ def baixar_relatorio_bomxop_simples(request):
 
 
 
-def extrai_bomxop_por_periodo(request, data_inicial, data_final):
+def extrai_bomxop_por_periodo(request, data_inicial, data_final,considera_frete=True):
 	
 	engine = get_engine()
 	OPs = get_numeros_OPs_por_periodo(data_inicial, data_final, engine)
@@ -173,14 +187,26 @@ def extrai_bomxop_por_periodo(request, data_inicial, data_final):
 		processamento.save()
 		################ 
 
-		codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(numero_op, engine, data_std)
+		codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(
+			numero_op=numero_op, 
+			engine=engine, 
+			data_std=data_std,
+			considera_frete=considera_frete
+		)
 
 		################ processamento
 		processamento.mensagem2 = f'Extraindo estrutura de {codigo}'
 		processamento.save()
 		################
 
-		estrutura, custos_totais_estrutura = estrutura_simples(codigo, data_referencia, engine, False, data_std)
+		estrutura, custos_totais_estrutura = estrutura_simples(
+			codigo=codigo, 
+			data_referencia=data_referencia, 
+			engine=engine, 
+			abre_todos_os_PIs=False, 
+			data_std=data_std,
+			considera_frete=considera_frete
+		)
 
 		################ processamento
 		processamento.mensagem2 = f'Unindo estrutura e OP'
@@ -301,7 +327,7 @@ def bomxopstd(request):
 
 
 
-def extrai_bomxopstd_pela_op(request, numero_op, engine = None):
+def extrai_bomxopstd_pela_op(request, numero_op, engine = None, considera_frete=True):
 
 	if not engine:
 		engine = get_engine()
@@ -311,7 +337,12 @@ def extrai_bomxopstd_pela_op(request, numero_op, engine = None):
 		if isinstance(data_std, str):
 			data_std = extrai_data_fechamento_de_string_yyyy_mm(data_std)
 
-	codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(numero_op, engine, data_std)
+	codigo, data_referencia, consulta_op, custos_totais_op = get_info_op(
+		numero_op=numero_op, 
+		engine=engine, 
+		data_std=data_std, 
+		considera_frete=considera_frete
+	)
 
 	if not codigo: return redirect(reverse("ghost:bomxopstd"))
 
@@ -320,7 +351,8 @@ def extrai_bomxopstd_pela_op(request, numero_op, engine = None):
 		data_referencia=data_referencia, 
 		engine=engine, 
 		abre_todos_os_PIs=False,
-		data_std=data_std
+		data_std=data_std,
+		considera_frete=considera_frete
 	)
 	estrutura_com_op = combina_estrutura_e_op(estrutura, consulta_op)
 
@@ -349,13 +381,18 @@ def bomxopstd_post(request):
 		return redirect(reverse("ghost:bomxopstd"))
 
 	numero_op = request.POST.get("numero-op")
+	considera_frete = request.POST.get("considera-frete")
 
 	if numero_op:
 		if len(numero_op) != 11:
 			messages.info(request, "Há um erro de digitação no número da OP")
 			return redirect(reverse("ghost:bomxopstd"))
 
-		return extrai_bomxopstd_pela_op(request, numero_op)
+		return extrai_bomxopstd_pela_op(
+			request=request, 
+			numero_op=numero_op, 
+			considera_frete=considera_frete
+		)
 	
 	data_inicial = request.POST.get("data-inicial")
 	data_final = request.POST.get("data-final")
@@ -363,7 +400,12 @@ def bomxopstd_post(request):
 	if data_inicial and data_final:
 		data_inicial = tratamento_data_referencia(data_inicial)
 		data_final = tratamento_data_referencia(data_final)
-		return extrai_bomxop_por_periodo(request, data_inicial, data_final)
+		return extrai_bomxop_por_periodo(
+			request=request, 
+			data_inicial=data_inicial, 
+			data_final=data_final,
+			considera_frete=considera_frete
+		)
 	
 	produto = request.POST.get("codigo-produto")
 

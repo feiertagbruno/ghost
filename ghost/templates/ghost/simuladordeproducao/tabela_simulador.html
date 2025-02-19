@@ -1,0 +1,44 @@
+<table class="tabela-simulador" id="tabela-simulador-id">
+	<thead class="cabecalho-tabela">
+
+		<tr>
+			{% for col, colspan in cabecalhos.categoria.items %}
+				<th colspan="{{colspan}}" >{{col}}</th>
+			{% endfor %}
+		</tr>
+
+		<tr>
+			{% for col, colspan in cabecalhos.data.items %}
+				<th colspan="{{colspan}}">{{col}}</th>
+			{% endfor %}
+		</tr>
+
+		<tr>
+			{% for col, colspan in cabecalhos.campo.items %}
+				<th colspan="{{colspan}}">{{col}}</th>
+			{% endfor %}
+		</tr>
+
+
+	</thead>
+	<tbody>
+		{% for row in rows %}
+			<tr>
+				{% for col, value in row.items %}
+					{% if 'index' not in col %}
+
+					<td
+							{% if col.2 not in armazens_visiveis %}
+							class="hidden"
+							{% endif %}
+							data-unique="{{col}}-{{row.index}}"
+					>
+						{{value}}
+					</td>
+
+					{% endif %}
+				{% endfor %}
+			</tr>
+		{% endfor %}
+	</tbody>
+</table>

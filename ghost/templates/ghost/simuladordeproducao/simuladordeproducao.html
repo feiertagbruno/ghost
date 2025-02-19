@@ -7,7 +7,12 @@
 
 {% block content %}
 
-<form id="form-multi-id" class="form form-simulador-de-producao" method="post" action="{% url "ghost:multiestruturas" %}">
+<form 
+	id="form-multi-id" 
+	class="form form-simulador-de-producao" 
+	method="post" 
+	action="{% url "ghost:adicionar-producao" %}"
+>
 	{% csrf_token %}
 	<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
 
@@ -21,7 +26,7 @@
 	<div class="flex-flow-row linha-form campos-simulador-producao">
 		<div class="no-wrap">
 			<label for="codigo-produto-id">Código do Produto:</label>
-			<input type="text" name="codigo-produto" id="codigo-produto-id">
+			<input type="text" name="codigo-produto" id="codigo-produto-id" maxlength="15">
 		</div>
 		<div class="no-wrap">
 			<label for="data-producao-id">Data da Produção:</label>
@@ -34,9 +39,11 @@
 	</div>
 	<button id="botao-multi-simples" class="botao-padrao" type="submit">Adicionar Produção</button>
 </form>
-<div class="box-tabela-simulador">
-	{{simulador}}
-</div>
+
+{% if not inicial %}
+{% include "ghost/simuladordeproducao/tabela_simulador_page.html" %}
+{% endif %}
+
 <script src="{% static "ghost/js/simuladorDeProducao.js" %}"></script>
 
 {% endblock content %}

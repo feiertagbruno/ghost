@@ -69,6 +69,7 @@ table {
 }
 
 th, td {
+	white-space: nowrap;
 	border: 1px solid #ddd;
 	padding: 0.5rem;
 	text-align: left;

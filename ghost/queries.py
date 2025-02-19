@@ -42,7 +42,8 @@ def get_query_alternativos():
 	return """
 SELECT 
 	TRIM(GI_PRODORI) prodori,
-	TRIM(GI_PRODALT) alternativos
+	TRIM(GI_PRODALT) alternativos,
+	TRIM(GI_ORDEM) ordem_alt
 FROM VW_MN_SGI GI
 WHERE GI.D_E_L_E_T_ <> '*'
 	AND GI_PRODORI IN (SELECT value FROM string_split(:codigos,','))
@@ -54,7 +55,7 @@ def get_query_ultima_compra_produtos():
 	return """
 DECLARE @PRODUTOS VARCHAR(MAX); SET @PRODUTOS = :codigos;
 DECLARE @DATA_REFERENCIA VARCHAR(10); SET @DATA_REFERENCIA =  CONVERT(varchar,:data_referencia,112);
-DECLARE @DATA_INICIAL VARCHAR(10); SET @DATA_INICIAL = CONVERT( VARCHAR, DATEADD(YEAR,-2, @DATA_REFERENCIA),112);
+DECLARE @DATA_INICIAL VARCHAR(10); SET @DATA_INICIAL = CONVERT( VARCHAR, DATEADD(YEAR,-4, @DATA_REFERENCIA),112);
 WITH
 FRETES AS (
 	SELECT 
@@ -158,7 +159,7 @@ def get_query_ultimo_fechamento_produtos():
 	return """
 	DECLARE @PRODUTOS VARCHAR(MAX) =  :codigos;
 	DECLARE @DATA_REFERENCIA VARCHAR(10) = CONVERT(VARCHAR,:data_referencia,112);
-	DECLARE @DATA_INICIAL VARCHAR(10) = CONVERT(VARCHAR, DATEADD(YEAR,-2,:data_referencia),112);
+	DECLARE @DATA_INICIAL VARCHAR(10) = CONVERT(VARCHAR, DATEADD(YEAR,-4,:data_referencia),112);
 	DECLARE @ARMAZENS VARCHAR(20) = '11,14,20'
 
 	SELECT TRIM(B9_COD) insumo,
@@ -430,6 +431,7 @@ WHERE B9.D_E_L_E_T_ <> '*'
 
 def get_query_estoque_atual():
 	return """
+DECLARE @CODIGOS VARCHAR(MAX) = :codigos ;
 SELECT
 	TRIM(B2_COD) codigo,
 	B2_LOCAL armazem,
@@ -437,4 +439,177 @@ SELECT
 FROM VW_MN_SB2 B2
 WHERE B2.D_E_L_E_T_ <> '*'
 	AND B2_QATU <> 0
+	AND B2_COD IN ( SELECT value FROM string_split(@CODIGOS, ',') )
+"""
+
+def get_query_pedidos_para_simulador_de_producao():
+	return """
+DECLARE @HOJE VARCHAR(10) = CONVERT(VARCHAR,GETDATE(),112);
+SELECT
+	Produto codigo,
+	CASE 
+		WHEN Entrega < @HOJE THEN DATEADD(DAY,1,@HOJE)
+		ELSE Entrega
+	END entrega,
+	SUM([Quant.Receber]) quant,
+	Tipo tipo
+FROM VW_MN_PEDIDOS_COMPRA_EM_ABERTO
+	WHERE Tipo IN ('BN','EM','MP','PI')
+		AND Produto IN ( :codigos )
+GROUP BY Produto, Emissao, Entrega, Tipo
+"""
+
+def get_query_ultima_compra_sem_frete():
+	return """
+DECLARE @PRODUTOS VARCHAR(MAX); SET @PRODUTOS = :codigos;
+DECLARE @DATA_REFERENCIA VARCHAR(10); SET @DATA_REFERENCIA =  CONVERT(varchar,:data_referencia,112);
+DECLARE @DATA_INICIAL VARCHAR(10); SET @DATA_INICIAL = CONVERT( VARCHAR, DATEADD(YEAR,-4, @DATA_REFERENCIA),112);
+WITH
+ENTRADAS AS (
+SELECT 
+	TRIM(D1_COD) codigo, 
+	TRIM(D1_FORNECE) forn, 
+	TRIM(D1_LOJA) loja,
+	TRIM(D1_DOC) doc, 
+	TRIM(D1_SERIE) serie,
+	D1_DTDIGIT digitacao, 
+	SUM(D1_QUANT) quant, 
+	SUM(D1_TOTAL) total, 
+	SUM(D1_CUSTO) custo
+
+FROM VW_MN_SD1 D1
+WHERE
+	D1.D_E_L_E_T_ <> '*'
+	AND D1_DTDIGIT BETWEEN @DATA_INICIAL AND @DATA_REFERENCIA
+	AND ( D1_TES IN ('011','012','159','086','134')
+	OR D1_CF IN ('1101','1124','2101','3101') )
+	AND D1_COD IN ( SELECT value FROM string_split(@PRODUTOS, ',') )
+	AND D1_QUANT <> 0
+GROUP BY
+	D1_COD, 
+	D1_FORNECE, 
+	D1_LOJA,
+	D1_DOC, 
+	D1_SERIE,
+	D1_DTDIGIT
+
+),
+
+ULTIMAS_COMPRAS AS (
+	SELECT 
+		codigo,
+		TRIM(A2_NOME) fornecedor,
+		digitacao, quant,
+		
+		total custo,
+
+		ROW_NUMBER() OVER (
+			PARTITION BY codigo
+			ORDER BY digitacao DESC, doc DESC
+		) num_linha
+
+	FROM ENTRADAS E
+
+	LEFT JOIN VW_MN_SA2 A2
+		ON A2.D_E_L_E_T_ <> '*'
+		AND forn = TRIM(A2_COD)
+		AND loja = TRIM(A2_LOJA)
+
+	WHERE codigo IN (SELECT value FROM string_split(@PRODUTOS,','))
+),
+
+CONSULTA AS (
+	SELECT 
+		'Código: ' + codigo + ',' + CHAR(10) + 
+		'Fornecedor: ' + fornecedor + ',' + CHAR(10) +
+		'Data: ' + CONVERT(VARCHAR,CONVERT(DATE, digitacao),103) + ',' + CHAR(10) +
+		'Quantidade: ' + CAST(quant AS varchar(20))  + ',' + CHAR(10) +
+		'Custo Últ. Entrada: ' + REPLACE(CAST(ROUND(custo / quant, 5) AS varchar(20)),'.',',') comentario_ultima_compra,
+
+		ROUND(custo / quant, 5) ult_compra_custo_utilizado,
+		codigo insumo
+
+	FROM ULTIMAS_COMPRAS
+	WHERE num_linha = 1
+)
+
+SELECT * FROM CONSULTA
+ORDER BY insumo
+"""
+
+def get_query_compra_mais_antiga_sem_frete():
+	return """
+DECLARE @PRODUTOS VARCHAR(MAX); SET @PRODUTOS = :produtos ;
+DECLARE @DATA_REFERENCIA VARCHAR(10); SET @DATA_REFERENCIA =  CONVERT(VARCHAR,:data_referencia,112);
+WITH
+ENTRADAS AS (
+SELECT 
+	TRIM(D1_COD) codigo, 
+	TRIM(D1_FORNECE) forn, 
+	TRIM(D1_LOJA) loja,
+	TRIM(D1_DOC) doc, 
+	TRIM(D1_SERIE) serie,
+	D1_DTDIGIT digitacao, 
+	SUM(D1_QUANT) quant, 
+	SUM(D1_TOTAL) total, 
+	SUM(D1_CUSTO) custo
+
+FROM VW_MN_SD1 D1
+WHERE
+	D1.D_E_L_E_T_ <> '*'
+	AND D1_DTDIGIT >= @DATA_REFERENCIA
+	AND ( D1_TES IN ('011','012','159','086','134')
+	OR D1_CF IN ('1101','1124','2101','3101') )
+	AND D1_COD IN ( SELECT value FROM string_split(@PRODUTOS, ',') )
+	AND D1_QUANT <> 0
+GROUP BY
+	D1_COD, 
+	D1_FORNECE, 
+	D1_LOJA,
+	D1_DOC, 
+	D1_SERIE,
+	D1_DTDIGIT
+
+),
+
+ULTIMAS_COMPRAS AS (
+	SELECT 
+		codigo,
+		TRIM(A2_NOME) fornecedor,
+		digitacao, quant,
+		
+		total custo,
+
+		ROW_NUMBER() OVER (
+			PARTITION BY codigo
+			ORDER BY digitacao, doc
+		) num_linha
+
+	FROM ENTRADAS E
+
+	LEFT JOIN VW_MN_SA2 A2
+		ON A2.D_E_L_E_T_ <> '*'
+		AND forn = TRIM(A2_COD)
+		AND loja = TRIM(A2_LOJA)
+
+	WHERE codigo IN (SELECT value FROM string_split(@PRODUTOS,','))
+),
+
+CONSULTA AS (
+	SELECT 
+		'Código: ' + codigo + ',' + CHAR(10) + 
+		'Fornecedor: ' + fornecedor + ',' + CHAR(10) +
+		'Data: ' + CONVERT(VARCHAR,CONVERT(DATE, digitacao),103) + ',' + CHAR(10) +
+		'Quantidade: ' + CAST(quant AS varchar(20))  + ',' + CHAR(10) +
+		'Custo Últ. Entrada: ' + REPLACE(CAST(ROUND(custo / quant, 5) AS varchar(20)),'.',',') comentario_ultima_compra,
+
+		ROUND(custo / quant, 5) ult_compra_custo_utilizado,
+		codigo insumo
+
+	FROM ULTIMAS_COMPRAS
+	WHERE num_linha = 1
+)
+
+SELECT * FROM CONSULTA
+ORDER BY insumo
 """

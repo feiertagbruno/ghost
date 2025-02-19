@@ -7,6 +7,43 @@
 }
 
 .box-tabela-simulador {
-	width: 90%;
+	max-width: 90%;
+	height: 90vh;
 	overflow: auto;
+	margin: 1rem auto;
+	border: solid 3px gray;
+	border-radius: 10px;
+	padding: 0.5rem;
+}
+
+.titulo-tabela {
+	font-size: 2.5rem;
+	place-self: center;
+}
+
+.tabela-simulador thead {
+	position: sticky;
+	top:0;
+	border: solid 1px rgba(128, 128, 128, 0.479);
+}
+
+.form-tabela {
+	display: flex;
+	flex-flow: column;
+}
+
+.armazem-checkbox-div {
+	white-space: nowrap;
+}
+
+.box-armazens {
+	display: flex;
+	gap: 1rem;
+	margin-right: 2rem;
+}
+
+.parte-superior-div-simulador {
+	display: flex;
+	flex-flow: row wrap;
+	padding: .5rem;
 }
