@@ -3,6 +3,9 @@ const textarea = document.getElementById('codigos-produtos-id');
 const input_codigo = document.querySelector("#codigo-produto-id")
 const armazens = document.querySelectorAll(".armazem-checkbox")
 const form_tabela_simulador = document.getElementById("form-tabela-simulador-id")
+const form_add_producao = document.getElementById("form-multi-id")
+const data_producao = document.getElementById("data-producao-id")
+const quant = document.getElementById("quantidade-id")
 
 gerarCodigoAleatorio(10, codigo_identificador)
 
@@ -18,6 +21,8 @@ armazens.forEach(arm => {
 	}
 })
 
-form_tabela_simulador.onsubmit = () => {
-	document.getElementById("tabela-simulador-html-id").value = document.querySelector(".tabela-simulador").outerHTML
+form_add_producao.onsubmit = e => {
+	if (input_codigo.value === '' | data_producao.value === '' | quant.value === '') {
+		e.preventDefault()
+	}
 }

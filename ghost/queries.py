@@ -270,6 +270,17 @@ def get_query_busca_descricao_produto():
 	FROM VW_MN_SB1 B1 WHERE B1.D_E_L_E_T_ <> '*' AND B1_COD = :codigo
 """
 
+def get_query_busca_info_produtos():
+	return """
+DECLARE @CODIGOS VARCHAR(MAX) = :codigos ;
+SELECT 
+	TRIM(B1_COD) codigo,
+	TRIM(B1_DESC) descricao, 
+	TRIM(B1_TIPO) tipo 
+FROM VW_MN_SB1 B1 WHERE B1.D_E_L_E_T_ <> '*' 
+	AND B1_COD IN ( SELECT value FROM string_split(@CODIGOS, ',') )
+"""
+
 def get_query_numeros_op_por_periodo():
 	return """
 DECLARE @DATA_INICIAL VARCHAR(10) = CONVERT(VARCHAR, :data_inicial,112)
@@ -445,17 +456,19 @@ WHERE B2.D_E_L_E_T_ <> '*'
 def get_query_pedidos_para_simulador_de_producao():
 	return """
 DECLARE @HOJE VARCHAR(10) = CONVERT(VARCHAR,GETDATE(),112);
+DECLARE @CODIGOS VARCHAR(MAX) = :codigos ;
 SELECT
 	Produto codigo,
-	CASE 
-		WHEN Entrega < @HOJE THEN DATEADD(DAY,1,@HOJE)
-		ELSE Entrega
-	END entrega,
-	SUM([Quant.Receber]) quant,
-	Tipo tipo
+	CONVERT(VARCHAR, CONVERT(DATE,
+		CASE 
+			WHEN Entrega < @HOJE THEN DATEADD(DAY,1,@HOJE)
+			ELSE Entrega
+		END
+	), 105) entrega,
+	SUM([Quant.Receber]) quant
 FROM VW_MN_PEDIDOS_COMPRA_EM_ABERTO
 	WHERE Tipo IN ('BN','EM','MP','PI')
-		AND Produto IN ( :codigos )
+		AND (@CODIGOS IS NULL OR Produto IN ( ( SELECT value FROM string_split(@CODIGOS, ',') ) ))
 GROUP BY Produto, Emissao, Entrega, Tipo
 """
 
@@ -612,4 +625,27 @@ CONSULTA AS (
 
 SELECT * FROM CONSULTA
 ORDER BY insumo
+"""
+
+
+
+
+def get_query_produzidos_da_data():
+	return """
+DECLARE @DATA_INICIAL VARCHAR(10) = CONVERT(varchar, :data_inicial,112);
+DECLARE @DATA_FINAL VARCHAR(10) = CONVERT(varchar, :data_final,112);
+DECLARE @CODIGOS VARCHAR(MAX) = :codigos;
+
+SELECT 
+	TRIM(D3_COD) codigo,
+	SUM(D3_QUANT) quant,
+	CONVERT(date, D3_EMISSAO) data
+FROM VW_MN_SD3 D3
+WHERE D3.D_E_L_E_T_ <> '*'
+	AND D3_TM = '200'
+	AND D3_ESTORNO <> 'S'
+	AND D3_FILIAL = '01'
+	AND D3_EMISSAO BETWEEN @DATA_INICIAL AND @DATA_FINAL
+	AND ( @CODIGOS IS NULL OR D3_COD IN ( SELECT value FROM string_split(@CODIGOS, ',') ) )
+GROUP BY D3_COD, D3_EMISSAO
 """

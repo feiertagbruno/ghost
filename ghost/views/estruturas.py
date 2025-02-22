@@ -141,6 +141,24 @@ def explode_estrutura(
 	elif solicitante == "simulador":
 		estrutura, todos_os_codigos = acrescenta_alternativos_modelo_simulador(estrutura, engine)
 
+
+	if not abre_todos_os_PIs:
+		estrutura = estrutura[(estrutura["tipo_insumo"] != "PI") | \
+						((estrutura["tipo_insumo"] == "PI") & (estrutura["fantasma"] != "S"))]
+	else:
+		estrutura = estrutura[estrutura["tipo_insumo"] != "PI"]
+		
+
+	try:
+		descricao = estrutura.loc[estrutura["codigo_pai"] == codigo, "descricao_pai"].values[0]
+		tipo_original = estrutura.loc[estrutura["codigo_pai"] == codigo, "tipo_pai"].values[0]
+	except:
+		descricao, tipo_original = get_descricao_produto(codigo, engine)
+	
+	estrutura["codigo_original"] = str(codigo)
+	estrutura["descricao_cod_original"] = str(descricao)
+	estrutura["tipo_original"] = str(tipo_original)
+
 	return estrutura, todos_os_codigos
 
 
@@ -354,20 +372,11 @@ def estrutura_simples(codigo, data_referencia, engine = None,
 		engine, 
 		abre_todos_os_PIs
 	)
+	descricao = estrutura.loc[0,"descricao_cod_original"]
 
-	if not abre_todos_os_PIs:
-		estrutura = estrutura[(estrutura["tipo_insumo"] != "PI") | \
-						((estrutura["tipo_insumo"] == "PI") & (estrutura["fantasma"] != "S"))]
-	else:
-		estrutura = estrutura[estrutura["tipo_insumo"] != "PI"]
 
 	str_codigos = forma_string_codigos(todos_os_codigos["todos_os_codigos"])
 
-	try:
-		descricao = estrutura.loc[estrutura["codigo_pai"] == codigo, "descricao_pai"].values[0]
-		tipo_original = estrutura.loc[estrutura["codigo_pai"] == codigo, "tipo_pai"].values[0]
-	except:
-		descricao, tipo_original = get_descricao_produto(codigo, engine)
 
 	# ÚLTIMA COMPRA
 	custos_ultima_compra = busca_custos_ultima_compra(
@@ -485,10 +494,6 @@ def estrutura_simples(codigo, data_referencia, engine = None,
 			"comentario_custo_medio"
 		],
 		custos_totais_produto)
-	
-	estrutura["codigo_original"] = str(codigo)
-	estrutura["descricao_cod_original"] = str(descricao)
-	estrutura["tipo_original"] = str(tipo_original)
 
 	return estrutura, custos_totais_produto
 	
@@ -757,7 +762,10 @@ def acrescenta_alternativos_modelo_simulador(estrutura: pd.DataFrame, engine):
 
 	resultado = pd.read_sql(text(query), engine, params={
 		"codigos":str_codigos,
-	}).rename(columns={"prodori": "insumo"})
+	}).rename(columns={"alternativos": "insumo","prodori":"alternativo_de"})
 	estrutura = pd.concat([estrutura, resultado], ignore_index=True )
+
+	todos_os_codigos = estrutura[["insumo"]].drop_duplicates(subset="insumo")\
+		.rename(columns={"insumo":"todos_os_codigos"})
 
 	return estrutura, todos_os_codigos

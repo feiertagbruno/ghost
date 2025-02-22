@@ -41,6 +41,7 @@ INSTALLED_APPS = [
 
     "ghost",
 	"django_htmx",
+	"rest_framework",
 ]
 
 MIDDLEWARE = [

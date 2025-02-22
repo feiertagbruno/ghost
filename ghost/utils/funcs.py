@@ -5,7 +5,9 @@ from sqlalchemy import text
 import pandas as pd
 from datetime import datetime, timedelta 
 
-from ghost.queries import get_query_busca_descricao_produto
+from ghost.queries import (
+	get_query_busca_descricao_produto, get_query_busca_info_produtos
+)
 
 import random
 import string
@@ -13,9 +15,9 @@ import string
 
 
 
-def gerar_codigo_aleatorio(tamanho=20):
+def gerar_codigo_aleatorio_simulador(tamanho=20):
     caracteres = string.ascii_letters + string.digits + "_"
-    return ''.join(random.choices(caracteres, k=tamanho))
+    return 'simudraft' + ''.join(random.choices(caracteres, k=tamanho))
 
 
 
@@ -39,6 +41,19 @@ def get_descricao_produto(codigo, engine = None):
 	descricao = resultado["descricao"].values[0]
 	tipo = resultado["tipo"].values[0]
 	return descricao, tipo
+
+
+
+
+def get_info_produtos(codigos:str, engine = None):
+	if not engine:
+		engine = get_engine()
+
+	resultado = pd.read_sql(
+			text(get_query_busca_info_produtos()),
+			engine, params={"codigos":codigos}
+		)
+	return resultado
 
 
 

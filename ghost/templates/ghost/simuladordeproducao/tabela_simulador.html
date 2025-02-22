@@ -1,21 +1,29 @@
+{% load static %}
+
 <table class="tabela-simulador" id="tabela-simulador-id">
 	<thead class="cabecalho-tabela">
 
 		<tr>
-			{% for col, colspan in cabecalhos.categoria.items %}
+			{% for item in cabecalhos.categoria %}
+				{% for col, colspan in item.items %}
 				<th colspan="{{colspan}}" >{{col}}</th>
+				{% endfor %}
 			{% endfor %}
 		</tr>
 
 		<tr>
-			{% for col, colspan in cabecalhos.data.items %}
+			{% for item in cabecalhos.data %}
+				{% for col, colspan in item.items %}
 				<th colspan="{{colspan}}">{{col}}</th>
+				{% endfor %}
 			{% endfor %}
 		</tr>
 
 		<tr>
-			{% for col, colspan in cabecalhos.campo.items %}
+			{% for item in cabecalhos.campo %}
+				{% for col, colspan in item.items %}
 				<th colspan="{{colspan}}">{{col}}</th>
+				{% endfor %}
 			{% endfor %}
 		</tr>
 
@@ -31,7 +39,7 @@
 							{% if col.2 not in armazens_visiveis %}
 							class="hidden"
 							{% endif %}
-							data-unique="{{col}}-{{row.index}}"
+							data-unique="{{col}}|{{row.index}}"
 					>
 						{{value}}
 					</td>
@@ -42,3 +50,5 @@
 		{% endfor %}
 	</tbody>
 </table>
+
+<script src="{% static 'ghost/js/tabelaSimulador.js' %}"></script>

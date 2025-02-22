@@ -16,5 +16,6 @@ urlpatterns = [
 	path("ghost/bomxopstdpost", views.bomxopstd_post, name="bomxopstd-post"),
 	path("ghost/materiais/simuladordeproducao/", views.simulador_de_producao, name="simulador-de-producao"),
 	path("ghost/materiais/adicionarproducao/", views.adicionar_producao, name="adicionar-producao"),
-	path("ghost/materiais/reprocessartabela", views.reprocessar_tabela, name="reprocessar-tabela")
+	path("ghost/materiais/reprocessartabela", views.reprocessar_tabela, name="reprocessar-tabela"),
+	path("alterasimuladordeproducao/", views.altera_simulador_de_producao), #simulador_de_producao.py
 ]
