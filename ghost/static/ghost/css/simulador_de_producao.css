@@ -1,9 +1,25 @@
 .form-simulador-de-producao {
-	width: 90%;
+	display: flex;
+	align-content: center;
+	width: fit-content;
+	gap: 0;
 }
 
-.campos-simulador-producao {
-	margin-left: 5.8%;
+.fixed-left {
+	position: sticky;
+	left: 0;
+	z-index: 10;
+}
+
+.fixed-left-col {
+	position: sticky;
+	left: 0;
+	z-index: 10;
+	outline: solid 2px rgba(202, 202, 202, 0.596);
+}
+
+.botao-simular {
+	margin-left: 3rem;
 }
 
 .box-tabela-simulador {
@@ -14,6 +30,7 @@
 	border: solid 3px gray;
 	border-radius: 10px;
 	padding: 0.5rem;
+	margin-bottom: 5vh;
 }
 
 .titulo-tabela {
@@ -24,12 +41,14 @@
 .tabela-simulador thead {
 	position: sticky;
 	top:0;
-	border: solid 1px rgba(128, 128, 128, 0.479);
+	outline: solid 1px rgba(128, 128, 128, 0.479);
+	z-index: 20;
 }
 
 .form-tabela {
 	display: flex;
 	flex-flow: column;
+	padding-bottom: 0.5rem;
 }
 
 .armazem-checkbox-div {
@@ -45,5 +64,43 @@
 .parte-superior-div-simulador {
 	display: flex;
 	flex-flow: row wrap;
+	align-items: center;
+	align-content: center;
 	padding: .5rem;
+}
+
+.mensagem-tabela-simulador {
+	padding: .5rem;
+	padding-left: 1.5rem;
+}
+
+.titulo-simulador-de-producao {
+	width: 90vw;
+	margin: 0 auto;
+}
+
+.primeira-linha-simulador {
+	display: flex;
+	flex-flow: row wrap;
+	width: 92vw;
+	margin: 0 auto;
+	justify-content: center;
+	align-items: center;
+	transform: translateX(-5rem);
+	gap: 2rem;
+}
+
+.form-trazer-simulacao {
+	display: flex;
+	align-items: center;
+	padding-top: 2rem;
+}
+
+.campos-simulador-producao {
+	display: flex;
+	padding: 0;
+}
+
+.botao-salvar-simulacao {
+	margin-left: 1rem;
 }

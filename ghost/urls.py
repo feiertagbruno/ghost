@@ -18,4 +18,6 @@ urlpatterns = [
 	path("ghost/materiais/adicionarproducao/", views.adicionar_producao, name="adicionar-producao"),
 	path("ghost/materiais/reprocessartabela", views.reprocessar_tabela, name="reprocessar-tabela"),
 	path("alterasimuladordeproducao/", views.altera_simulador_de_producao), #simulador_de_producao.py
+    path("salvarsimulacao/", views.salvar_simulacao), #simulador_de_producao.py
+    path("trazersimulacao", views.trazer_simulacao, name="trazer-simulacao"), #simulador_de_producao.py
 ]

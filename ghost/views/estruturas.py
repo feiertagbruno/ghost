@@ -159,6 +159,12 @@ def explode_estrutura(
 	estrutura["descricao_cod_original"] = str(descricao)
 	estrutura["tipo_original"] = str(tipo_original)
 
+	if solicitante == "simulador":
+		estrutura = estrutura[[
+			"codigo_original","descricao_cod_original","tipo_original",
+			"insumo", "alternativo_de", "ordem_alt", "quant_utilizada"
+		]]
+
 	return estrutura, todos_os_codigos
 
 

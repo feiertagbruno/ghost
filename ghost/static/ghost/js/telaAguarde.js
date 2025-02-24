@@ -120,3 +120,14 @@ function mostra_tela_aguarde(csrf, codigo, caller) {
 function remove_texto_tela_aguarde() {
 	tela_aguarde.remove()
 }
+/**
+ * 
+ * @param {"message-error" | "message-info" | "message-success"} style 
+ */
+function mensagem_padrao(style, mensagem) {
+	const mensagem_padrao = document.createElement("div")
+	mensagem_padrao.textContent = mensagem
+	mensagem_padrao.classList.add("message")
+	mensagem_padrao.classList.add(style)
+	document.querySelector(".linha-logo").insertAdjacentElement("afterend",mensagem_padrao)
+}

@@ -22,7 +22,12 @@
 		<tr>
 			{% for item in cabecalhos.campo %}
 				{% for col, colspan in item.items %}
-				<th colspan="{{colspan}}">{{col}}</th>
+				<th 
+					{% if col in colunas_fixas %}
+					class="fixed-left-col"
+					{% endif %}
+					colspan="{{colspan}}"
+				>{{col}}</th>
 				{% endfor %}
 			{% endfor %}
 		</tr>
@@ -36,8 +41,13 @@
 					{% if 'index' not in col %}
 
 					<td
-							{% if col.2 not in armazens_visiveis %}
-							class="hidden"
+							{% if col in colunas_fixas %}
+							class="fixed-left-col background-white"
+							{% endif %}
+							{% if 'Resultado' in col %}
+							{% if value < 0 %}
+							class="background-vermelho-claro color-vermelho"
+							{% endif %}
 							{% endif %}
 							data-unique="{{col}}|{{row.index}}"
 					>

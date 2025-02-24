@@ -57,6 +57,15 @@ input[type="month"] {
 	margin-top: 0.5rem;
 }
 
+select {
+	padding: 1rem;
+	width: fit-content;
+	border: 2px solid gray;
+	border-radius: 20px;
+	font-family: inherit;
+	background: rgba(red, green, blue, .8);
+}
+
 label {
 	padding: 0.5rem 1.5rem;
 	place-content: top;

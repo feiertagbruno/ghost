@@ -275,8 +275,9 @@ def get_query_busca_info_produtos():
 DECLARE @CODIGOS VARCHAR(MAX) = :codigos ;
 SELECT 
 	TRIM(B1_COD) codigo,
-	TRIM(B1_DESC) descricao, 
-	TRIM(B1_TIPO) tipo 
+	TRIM(B1_DESC) descricao_produto, 
+	TRIM(B1_TIPO) tipo_produto,
+	TRIM(B1_XORIMRP) origem_produto
 FROM VW_MN_SB1 B1 WHERE B1.D_E_L_E_T_ <> '*' 
 	AND B1_COD IN ( SELECT value FROM string_split(@CODIGOS, ',') )
 """
@@ -445,9 +446,15 @@ def get_query_estoque_atual():
 DECLARE @CODIGOS VARCHAR(MAX) = :codigos ;
 SELECT
 	TRIM(B2_COD) codigo,
+	TRIM(B1_DESC) descricao,
+	B1_TIPO tipo,
+	TRIM(B1_XORIMRP) origem,
 	B2_LOCAL armazem,
 	ISNULL(B2_QATU,0) quant
 FROM VW_MN_SB2 B2
+LEFT JOIN VW_MN_SB1 B1
+	ON B1.D_E_L_E_T_ <> '*'
+	AND B1_COD = B2_COD
 WHERE B2.D_E_L_E_T_ <> '*'
 	AND B2_QATU <> 0
 	AND B2_COD IN ( SELECT value FROM string_split(@CODIGOS, ',') )

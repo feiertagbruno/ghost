@@ -1,0 +1,2 @@
+validar se a tabela da simulação já existe antes de salvar, 
+  caso exista pedir para o usuário confirmar se quer substituir

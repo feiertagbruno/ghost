@@ -9,8 +9,9 @@ from sqlalchemy import text
 from datetime import datetime
 from io import StringIO
 from numpy import nan
+import json
 from ghost.queries import get_query_estoque_atual
-from ghost.views.estruturas import explode_estrutura, forma_string_codigos, estrutura_simples
+from ghost.views.estruturas import explode_estrutura, forma_string_codigos
 from ghost.utils.funcs import (
 	get_engine, tratamento_data_referencia, gerar_codigo_aleatorio_simulador,
 	get_info_produtos
@@ -20,7 +21,22 @@ from ghost.views.consultas import get_produzidos_na_data,get_pedidos
 def simulador_de_producao(request):
 	if request.session.get("codigo-aleatorio"):
 		del(request.session["codigo-aleatorio"])
-	context = {"inicial":True}
+	
+	query_tabelas_salvas = "SELECT name FROM sqlite_master WHERE type = 'table' AND name like 'simulacao_%'"
+	sqlite_conn = sqlite3.connect("db.sqlite3")
+
+	tabelas = []
+	tabelas_existentes = pd.read_sql(query_tabelas_salvas, sqlite_conn)
+	if not tabelas_existentes.empty:
+		lista_tabelas = tabelas_existentes["name"].to_list()
+
+		for tb in lista_tabelas:
+			tabelas.append(tb.split("_",1)[1])
+
+	context = {
+		"caller":"inicial",
+		"tabelas":tabelas if tabelas else None,
+	}
 	return render(request, "ghost/simuladordeproducao/simuladordeproducao.html", context)
 
 
@@ -28,10 +44,12 @@ def adicionar_producao(request):
 	if not request.method == "POST":
 		return redirect(reverse("ghost:simulador-de-producao"))
 	
-	codigo_aleatorio = request.session.get("codigo-aleatorio")
+	tabela_salva = request.POST.get("tabela-salva")
 
-	# if codigo_aleatorio:
-	# 	return adicionar_nova_producao(request)
+	if tabela_salva:
+		return adicionar_nova_producao(request, tabela_salva)
+	
+	codigo_aleatorio = request.session.get("codigo-aleatorio")
 
 	engine = get_engine()
 	
@@ -51,6 +69,8 @@ def adicionar_producao(request):
 		messages.error(request, "A data digitada não pode ser menor do que hoje")
 		return redirect(reverse("ghost:simulador-de-producao"))
 
+
+
 	estrutura, todos_os_codigos = explode_estrutura(
 		codigo=codigo,
 		data_referencia = data,
@@ -69,13 +89,18 @@ def adicionar_producao(request):
 			engine=engine
 		)
 		if not produzidos.empty:
-			quant -= produzidos.loc[produzidos["codigo"] == codigo, "quant"].values[0]
+			quant_produzida = produzidos.loc[produzidos["codigo"] == codigo, "quant"].values[0]
+			quant -= quant_produzida
+	
+	if quant <= 0:
+		messages.error(request,f"A quantidade produzida neste dia foi de {int(quant_produzida)}. "
+				  "Só é possivel simular uma quantidade maior do que esta.")
+		return redirect(reverse("ghost:simulador-de-producao"))
+		
 
 	estrutura["quant_utilizada"] = estrutura["quant_utilizada"].astype(float).map(lambda x: -round(x * quant,5))
 	todos_os_codigos = pd.concat([
 		todos_os_codigos, 
-		estrutura.loc[estrutura["codigo_pai"].notna(),["codigo_pai"]]\
-			.rename(columns={"codigo_pai":"todos_os_codigos"}),
 		pd.DataFrame({"todos_os_codigos":[codigo]})
 	])
 	todos_os_codigos = forma_string_codigos(todos_os_codigos["todos_os_codigos"].drop_duplicates())
@@ -87,7 +112,7 @@ def adicionar_producao(request):
 
 	# FORMA O ESTOQUE_PIVOT
 	armazens_visiveis = ['11','14','20','80','98','','Ttl Est']
-	estoque_pivot = estoque.pivot(index="codigo", columns="armazem", values="quant").reset_index()
+	estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
 	arm_exist = [col for col in estoque_pivot.columns if len(col) == 2]
 	estoque_pivot["Ttl Est"] = estoque_pivot[arm_exist].sum(axis=1)
 	hoje = hoje_date.strftime('%d-%m-%Y')
@@ -159,13 +184,33 @@ def adicionar_producao(request):
 	simulador = simulador[colunas_ordenadas]
 	
 
+	# DESCRIÇÃO PARA PRODUTOS SEM DESCRIÇÃO
+	todos_os_codigos = simulador.loc[
+			((~simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"].isna()) & 
+			(simulador[f"Estoquexxx{hoje}xxxdescricao"].isna())),
+			f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"
+		].rename("todos_os_codigos").drop_duplicates()
+	if not todos_os_codigos.empty:
+		todos_os_codigos = forma_string_codigos(todos_os_codigos)
+		info_produtos = get_info_produtos(todos_os_codigos, engine)
+		
+		simulador = simulador.merge(info_produtos,how="left",left_on=f"Estoquexxx{hoje}xxxcodigo",right_on="codigo")
+
+		simulador = simulador.fillna({
+			f"Estoquexxx{hoje}xxxdescricao": simulador["descricao_produto"],
+			f"Estoquexxx{hoje}xxxtipo": simulador["tipo_produto"],
+			f"Estoquexxx{hoje}xxxorigem": simulador["origem_produto"]
+		}).drop(columns=["descricao_produto","tipo_produto","origem_produto"])
+	info_produtos = None
+
 	# RESULTADO
 	simulador.fillna({f"Estoquexxx{hoje}xxxTtl Est":0}, inplace=True)
 
 	simulador_blocos = pd.DataFrame()
+	col_resultado_anterior = f"Estoquexxx{hoje}xxxTtl Est"
 	for d in datas_encontradas:
 		d_str = d.strftime("%d-%m-%Y")
-		colunas_para_somar = [f"Estoquexxx{hoje}xxxTtl Est"]
+		colunas_para_somar = [col_resultado_anterior]
 		bloco_dia = simulador.filter(like=d_str)
 		bloco_estoque = bloco_dia.filter(like="Estoque")
 		bloco_producao = bloco_dia.filter(like="Produção")
@@ -178,17 +223,17 @@ def adicionar_producao(request):
 		if not bloco_producao.empty:
 			colunas_quant_utilizada = bloco_producao.filter(like="quant_utilizada").columns
 			if colunas_quant_utilizada.any():
-				colunas_para_somar.append(*colunas_quant_utilizada)
+				colunas_para_somar.extend(colunas_quant_utilizada)
 			colunas_quant_utilizada = None
 			simulador_blocos = pd.concat([simulador_blocos,bloco_producao], axis=1)
 
-		simulador_blocos[f"Resultadoxxx{d_str}xxxqtd"] = simulador[colunas_para_somar].sum(axis=1).round(5)
+		simulador_blocos[f"Resultadoxxx{d_str}xxxqtd"] = simulador_blocos[colunas_para_somar].sum(axis=1).round(5)
 
 
 		# NEGATIVOS MP EM
 		negativos_mp = simulador_blocos.loc[	
 			((simulador_blocos[f"Resultadoxxx{d_str}xxxqtd"] < 0) & 
-			(simulador_blocos.filter(like="tipo_insumo").iloc[:,0] != 'PI')),:
+			(~simulador_blocos[f"Estoquexxx{hoje}xxxtipo"].isin(['PI','PA']))),:
 		]
 		if not negativos_mp.empty:
 			for _, row in negativos_mp.iterrows():
@@ -202,7 +247,7 @@ def adicionar_producao(request):
 					for _, alt in alternativo_de.sort_values(
 						by=f'Produçãoxxx{codigo}_{d_str}_{quant}xxxordem_alt',ascending=True
 					).iterrows():
-						quant_alt = alt[f"Estoquexxx{hoje}xxxTtl Est"]
+						quant_alt = alt[col_resultado_anterior]
 						alternativo = alt[f"Produçãoxxx{codigo}_{d_str}_{quant}xxxinsumo"]
 						if quant_alt > 0:
 							if quant_alt >= quant_neg:
@@ -226,14 +271,14 @@ def adicionar_producao(request):
 								] += quant_alt
 								quant_neg -= quant_alt
 
-		simulador_blocos[f"Resultadoxxx{d_str}xxxqtd"] = simulador[colunas_para_somar].sum(axis=1).round(5)
+		simulador_blocos[f"Resultadoxxx{d_str}xxxqtd"] = simulador_blocos[colunas_para_somar].sum(axis=1).round(5)
+		col_resultado_anterior = f"Resultadoxxx{d_str}xxxqtd"
 									
 		negativos_mp = None
 		cod_negativo = None
 		quant_neg = None
 		alternativo_de = None
 		quant_alt = None
-
 
 		bloco_estoque = None
 		bloco_producao = None
@@ -249,83 +294,33 @@ def adicionar_producao(request):
 	# ).round(5)
 
 	
+	
+	# ADICIONAR EXCLUSIVIDADE
+	simulador.insert(0,f"-xxx{hoje}xxxExclusividade","EXCLUSIVO")
 
-	# DESCRIÇÃO PARA PRODUTOS SEM DESCRIÇÃO
-	todos_os_codigos = pd.concat([
-		simulador.loc[
-			~simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxcodigo_pai"].isna(),
-			f"Produçãoxxx{codigo}_{data_str}_{quant}xxxcodigo_pai"
-		].rename("todos_os_codigos"), 
-		simulador.loc[
-			~simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"].isna(),
-			f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"
-		].rename("todos_os_codigos")
-	]).drop_duplicates()
-	todos_os_codigos = forma_string_codigos(todos_os_codigos)
-	descricao_produtos = get_info_produtos(todos_os_codigos, engine)
-	descricao_produtos = dict(zip(descricao_produtos["codigo"],descricao_produtos["descricao"]))
-	simulador.loc[:,f"Produçãoxxx{codigo}_{data_str}_{quant}xxxdescricao_pai"] = \
-		simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxdescricao_pai"].fillna(
-			simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxcodigo_pai"].map(descricao_produtos)
-		)
-	simulador.loc[:,f"Produçãoxxx{codigo}_{data_str}_{quant}xxxdescricao_insumo"] = \
-		simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxdescricao_insumo"].fillna(
-			simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"].map(descricao_produtos)
-		)
-	
-	# RESULTADO
-	# simulador.fillna({f"Estoquexxx{hoje}xxxTtl Est":0}, inplace=True)
-	# simulador.loc[:,f'Produçãoxxx{codigo}_{data_str}_{quant}xxxResultado'] = \
-	# 	(simulador[f"Estoquexxx{hoje}xxxTtl Est"] + 
-	# 		simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxquant_utilizada"]).round(5)
-	
 	# SALVAR NO BANCO DE DADOS
 	if not codigo_aleatorio:
 		codigo_aleatorio = gerar_codigo_aleatorio_simulador(10)
 		request.session["codigo-aleatorio"] = codigo_aleatorio
 	sqlite_conn = sqlite3.connect('db.sqlite3')
-
 	simulador.to_sql(name=codigo_aleatorio, con=sqlite_conn, if_exists="replace", index=True)
+	sqlite_conn.close()
 	
 	simulador = simulador.fillna('')
 
 	# CABEÇALHOS
-	cat_anterior = ''
-	dat_anterior = ''
-	cabecalhos = {
-		"categoria":[],
-		"data":[],
-		"campo":[],
-	}
-	for col in simulador.columns:
-		cat, dat, campo = col.split("xxx")
-		if cat == cat_anterior:
-			cabecalhos["categoria"][len(cabecalhos["categoria"])-1][cat] += 1
-		else:
-			cabecalhos["categoria"].append({cat:1})
-		cat_anterior = cat
+	cabecalhos, rows = get_cabecalhos_e_rows_simulador_de_producao(simulador)
 
-		if dat == dat_anterior:
-			cabecalhos["data"][len(cabecalhos["data"])-1][dat] += 1
-		else:
-			cabecalhos["data"].append({dat:1})
-		dat_anterior = dat
-
-		cabecalhos["campo"].append({campo:1})
-
-
-	rows = []
-	for i, row in simulador.iterrows():
-		row_data = row.to_dict()
-		row_data["index"] = i
-		rows.append(row_data)
-	
+	colunas_fixas = get_colunas_fixas(hoje)	
+	campos_alteraveis = get_campos_alteraveis()
 
 	context = {
-		"inicial":False,
+		"caller":"adicionar_producao",
 		"cabecalhos":cabecalhos,
 		"rows":rows,
 		"codigo_aleatorio": codigo_aleatorio,
+		"colunas_fixas": colunas_fixas,
+		"campos_alteraveis": campos_alteraveis,
 	}
 
 	
@@ -365,7 +360,7 @@ def reprocessar_tabela(request):
 		"rows": rows,
 		"armazens_visiveis": ['Código','Ttl Est',*armazens],
 		"armazens":armazens,
-		"inicial": False,
+		"caller": "reprocessar_tabela",
 	}
 
 	return render(request, "ghost/simuladordeproducao/tabela_simulador.html",context)
@@ -379,6 +374,11 @@ def altera_simulador_de_producao(request):
 	codigo_aleatorio = data.get("codigo_aleatorio")
 	unique = data.get("unique")
 	novo_valor = data.get("novo_valor")
+
+	try: 
+		novo_valor = float(novo_valor)
+	except:
+		...
 
 	col_name, row_index = unique.split("|")
 	row_index = int(row_index)
@@ -404,10 +404,11 @@ WHERE [index] = {row_index}
 
 
 
-def adicionar_nova_producao(request):
+def adicionar_nova_producao(request, tabela_salva):
 
+	tabela_salva = f"simulacao_{tabela_salva.strip()}"
 	engine = get_engine()
-	
+	codigo_aleatorio = request.session.get("codigo-aleatorio")
 	codigo = request.POST.get("codigo-produto")
 	data = request.POST.get("data-producao")
 	quant = request.POST.get("quantidade")
@@ -424,6 +425,8 @@ def adicionar_nova_producao(request):
 		messages.error(request, "A data digitada não pode ser menor do que hoje")
 		return redirect(reverse("ghost:simulador-de-producao"))
 
+
+
 	estrutura, todos_os_codigos = explode_estrutura(
 		codigo=codigo,
 		data_referencia = data,
@@ -432,102 +435,264 @@ def adicionar_nova_producao(request):
 		solicitante='simulador'
 	)
 
-	estrutura["quant_utilizada"] = estrutura["quant_utilizada"].astype(float).map(lambda x: round(x * quant,5))
 
-	# df_recuperado = pd.read_sql("SELECT * FROM pessoas", engine)
-	# verificar se já existe produção daquele PA naquele dia, se existir, excluir bloco e adicionar com nova quant
-
-	todos_os_codigos = forma_string_codigos(todos_os_codigos["todos_os_codigos"])
-
-	query_estoque = get_query_estoque_atual()
-	estoque = pd.read_sql(text(query_estoque),engine, params={
-		"codigos": todos_os_codigos,
-	})
-
-	armazens_visiveis = ['11','14','20','80','98','','Ttl Est']
-	estoque_pivot = estoque.pivot(index="codigo", columns="armazem", values="quant").fillna(0).reset_index()
-	arm_exist = [col for col in armazens_visiveis if col in estoque_pivot.columns]
-	estoque_pivot["Ttl Est"] = estoque_pivot[arm_exist].sum(axis=1)
-	hoje = datetime.today().strftime('%d-%m-%Y')
+	# PRODUZIDOS
+	hoje_date = datetime.today().date()
+	if data == hoje_date:
+		produzidos = get_produzidos_na_data(
+			data_inicial=data,
+			codigos=codigo,
+			engine=engine
+		)
+		if not produzidos.empty:
+			quant_produzida = produzidos.loc[produzidos["codigo"] == codigo, "quant"].values[0]
+			quant -= quant_produzida
 	
-	novos_cabecalhos = {}
-	i=0
-	for col in estoque_pivot.columns:
-		i += 1
-		novos_cabecalhos.update({col:f"{i:04}xxxEstoquexxx{hoje}xxx{col}"})
-
-	estoque_pivot = estoque_pivot.rename(columns=novos_cabecalhos)
-
-	armazens = estoque["armazem"].unique().tolist()
+	if quant <= 0:
+		messages.error(request,f"A quantidade produzida neste dia foi de {int(quant_produzida)}. "
+				  "Só é possivel simular uma quantidade maior do que esta.")
+		return redirect(reverse("ghost:simulador-de-producao"))
 	
-	novos_cabecalhos = {}
+	# PEGAR A TABELA SALVA NO BANCO
+	sqlite_conn = sqlite3.connect('db.sqlite3')
+	simulador = pd.read_sql(f"SELECT * FROM [{tabela_salva}]",sqlite_conn).drop(columns="index")
+	sqlite_conn.close()
+
 	data_str = data.strftime('%d-%m-%Y')
-	for col in estrutura.columns:
-		i += 1
-		if col == 'insumo': coluna_insumo = f"{i:04}xxxProduçãoxxx{data_str}xxx{col}"
-		novos_cabecalhos.update({col: f"{i:04}xxxProduçãoxxx{data_str}xxx{col}"})
 
-	estrutura = estrutura.rename(columns=novos_cabecalhos)
 
-	simulador = estoque_pivot.merge(
-		estrutura,how="left",
-		left_on=f'0001xxxEstoquexxx{hoje}xxxcodigo',
+	# VERIFICAR SE A PRODUÇÃO JÁ EXISTE NO SIMULADOR
+	verif_producao = simulador.filter(like=f"Produçãoxxx{codigo}_{data_str}")
+	if not verif_producao.empty:
+		simulador.drop(columns=verif_producao.columns, inplace=True)
+	verif_producao = None
+
+	# EXCLUIR COLUNAS DE RESULTADO
+	cols_resultado = simulador.filter(like="Resultadoxxx")
+	if not cols_resultado.empty:
+		simulador.drop(columns=cols_resultado.columns)
+
+	# DATA ESTOQUE
+	data_estoque = simulador.filter(like="Estoque").filter(like="codigo").columns[0].split("xxx")[1]
+
+	estrutura["quant_utilizada"] = estrutura["quant_utilizada"].astype(float).map(lambda x: -round(x * quant,5))
+
+	# ADICIONAR EXCLUSIVIDADE
+
+	def extrair_produtos_ja_adicionados(simulador):
+		produtos_ja_adicionados = set()
+		for col in simulador.filter(like="Produçãoxxx").columns:
+			produtos_ja_adicionados.add(col.split("xxx")[1].split("_")[0])
+		return produtos_ja_adicionados
+	
+	produtos_ja_adicionados = extrair_produtos_ja_adicionados(simulador)
+	if codigo not in produtos_ja_adicionados:
+		simulador.loc[simulador[f"Estoquexxx{data_estoque}xxxcodigo"].isin(estrutura["insumo"]),f"-xxx{data_estoque}xxxExclusividade"] = "COMUM"
+
+
+	todos_os_codigos = pd.concat([
+		todos_os_codigos, 
+		pd.DataFrame({"todos_os_codigos":[codigo]})
+	])
+	todos_os_codigos = todos_os_codigos.drop_duplicates("todos_os_codigos")
+	todos_os_codigos = todos_os_codigos.loc[
+		~todos_os_codigos["todos_os_codigos"].isin(simulador[f"Estoquexxx{data_estoque}xxxcodigo"]),
+		"todos_os_codigos"
+	]
+
+	# ESTRUTURA NOVOS CABEÇALHOS
+	estrutura, coluna_insumo = padronizar_cabecalhos_estrutura(codigo,data_str,quant,estrutura)
+
+
+	if not todos_os_codigos.empty:
+
+		todos_os_codigos = forma_string_codigos(todos_os_codigos)
+
+		query_estoque = get_query_estoque_atual()
+		estoque = pd.read_sql(text(query_estoque),engine, params={
+			"codigos": todos_os_codigos,
+		})
+
+		
+		# FORMA O ESTOQUE_PIVOT
+		armazens_visiveis = ['11','14','20','80','98','','Ttl Est']
+		estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
+		arm_exist = [col for col in estoque_pivot.columns if len(col) == 2]
+		estoque_pivot["Ttl Est"] = estoque_pivot[arm_exist].sum(axis=1)
+		
+		# ESTOQUE NOVOS CABEÇALHOS
+		novos_cabecalhos = {}
+		for col in estoque_pivot.columns:
+			novos_cabecalhos.update({col:f"Estoquexxx{data_estoque}xxx{col}"})
+
+		estoque_pivot = estoque_pivot.rename(columns=novos_cabecalhos)
+
+		armazens = estoque["armazem"].unique().tolist()
+
+		simulador = pd.concat([simulador, estoque_pivot])
+	
+
+	# COMBINA O ESTOQUE_PIVOT COM O ESTRUTURA
+	simulador = simulador.merge(
+		estrutura,how="outer",
+		left_on=f'Estoquexxx{data_estoque}xxxcodigo',
 		right_on=coluna_insumo
 	)
 
-	simulador[f'{i:04}xxxProduçãoxxx{data_str}xxxResultado'] = \
-		(simulador.filter(like="Ttl Est").values - simulador.filter(like="quant_utilizada").values).round(5)
-	
-	negativos = simulador.loc[
-		(simulador.filter(like="Resultado").values < 0) & (simulador.filter(like="tipo_insumo").values == 'PI')
-		,:
-	]
+	# RESULTADO DO PA/PI PRODUZIDO
+	simulador.loc[
+		simulador.filter(like=f"Estoquexxx{data_estoque}xxxcodigo").iloc[:,0] == codigo,
+		simulador.filter(like=f"Produçãoxxx{codigo}_{data_str}_{quant}xxxquant_utilizada").columns
+	] = quant
 
+	# PREENCHER PRODUTOS QUE VIERAM SOMENTE NA BOM
+	produtos_sem_estoque = simulador.loc[simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"].isna(),:]
+	if not produtos_sem_estoque.empty:
+		# simulador.replace({f"Estoquexxx{hoje}xxxcodigo":{"":nan}},inplace=True)
+		simulador.loc[:,f"Estoquexxx{data_estoque}xxxcodigo"] = simulador[f"Estoquexxx{data_estoque}xxxcodigo"]\
+			.combine_first(simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"])
+	produtos_sem_estoque = None
+
+
+	# ORDENAR COLUNAS POR DATA
+	colunas_ordenadas, datas_encontradas = ordenar_colunas_por_data(simulador.columns)
+	simulador = simulador[colunas_ordenadas]
+	
+
+	# DESCRIÇÃO PARA PRODUTOS SEM DESCRIÇÃO
+	todos_os_codigos = simulador.loc[
+			((~simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"].isna()) & 
+			(simulador[f"Estoquexxx{data_estoque}xxxdescricao"].isna())),
+			f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"
+		].rename("todos_os_codigos").drop_duplicates()
+	if not todos_os_codigos.empty:
+		todos_os_codigos = forma_string_codigos(todos_os_codigos)
+		info_produtos = get_info_produtos(todos_os_codigos, engine)
+		
+		simulador = simulador.merge(info_produtos,how="left",left_on=f"Estoquexxx{data_estoque}xxxcodigo",right_on="codigo")
+
+		simulador = simulador.fillna({
+			f"Estoquexxx{data_estoque}xxxdescricao": simulador["descricao_produto"],
+			f"Estoquexxx{data_estoque}xxxtipo": simulador["tipo_produto"],
+			f"Estoquexxx{data_estoque}xxxorigem": simulador["origem_produto"]
+		}).drop(columns=["descricao_produto","tipo_produto","origem_produto"])
+	info_produtos = None
+
+	# RESULTADO
+	simulador.fillna({f"Estoquexxx{data_estoque}xxxTtl Est":0}, inplace=True)
+
+	simulador_blocos = pd.DataFrame()
+	col_resultado_anterior = f"Estoquexxx{data_estoque}xxxTtl Est"
+	for d in datas_encontradas:
+		d_str = d.strftime("%d-%m-%Y")
+		colunas_para_somar = [col_resultado_anterior]
+		bloco_dia = simulador.filter(like=d_str)
+		bloco_estoque = bloco_dia.filter(like="Estoque")
+		bloco_producao = bloco_dia.filter(like="Produção")
+		bloco_pedidos = bloco_dia.filter(like="Pedidos")
+		if not bloco_estoque.empty:
+			simulador_blocos = pd.concat([simulador_blocos,bloco_estoque], axis=1)
+		if not bloco_pedidos.empty:
+			colunas_para_somar.append(f"Pedidosxxx{d_str}xxxquant_pedidos")
+			simulador_blocos = pd.concat([simulador_blocos,bloco_pedidos], axis=1)
+		if not bloco_producao.empty:
+			colunas_quant_utilizada = bloco_producao.filter(like="quant_utilizada").columns
+			if colunas_quant_utilizada.any():
+				colunas_para_somar.extend(colunas_quant_utilizada)
+			colunas_quant_utilizada = None
+			simulador_blocos = pd.concat([simulador_blocos,bloco_producao], axis=1)
+
+		simulador_blocos[f"Resultadoxxx{d_str}xxxqtd"] = simulador_blocos[colunas_para_somar].sum(axis=1).round(5)
+
+
+		# NEGATIVOS MP EM
+		negativos_mp = simulador_blocos.loc[	
+			((simulador_blocos[f"Resultadoxxx{d_str}xxxqtd"] < 0) & 
+			(~simulador_blocos[f"Estoquexxx{data_estoque}xxxtipo"].isin(['PI','PA']))),:
+		]
+		if not negativos_mp.empty and not bloco_producao.empty:
+			for _, row in negativos_mp.iterrows():
+				cod_negativo = row[f'Produçãoxxx{codigo}_{d_str}_{quant}xxxinsumo']
+				quant_neg = -row.filter(like=f'Resultadoxxx{d_str}xxxqtd').values[0]
+				alternativo_de = simulador_blocos.loc[
+					simulador_blocos[f'Produçãoxxx{codigo}_{d_str}_{quant}xxxalternativo_de'] == cod_negativo ,
+					:
+				]
+				if not alternativo_de.empty:
+					for _, alt in alternativo_de.sort_values(
+						by=f'Produçãoxxx{codigo}_{d_str}_{quant}xxxordem_alt',ascending=True
+					).iterrows():
+						quant_alt = alt[col_resultado_anterior]
+						alternativo = alt[f"Produçãoxxx{codigo}_{d_str}_{quant}xxxinsumo"]
+						if quant_alt > 0:
+							if quant_alt >= quant_neg:
+								simulador_blocos.loc[
+									(simulador_blocos[f"Produçãoxxx{codigo}_{d_str}_{quant}xxxinsumo"] == alternativo),
+									f"Produçãoxxx{codigo}_{d_str}_{quant}xxxquant_utilizada"
+								] -= quant_neg
+								simulador_blocos.loc[
+									(simulador_blocos[f"Produçãoxxx{codigo}_{d_str}_{quant}xxxinsumo"] == cod_negativo),
+									f"Produçãoxxx{codigo}_{d_str}_{quant}xxxquant_utilizada"
+								] += quant_neg
+								break
+							elif quant_alt < quant_neg:
+								simulador_blocos.loc[
+									(simulador_blocos[f"Produçãoxxx{codigo}_{d_str}_{quant}xxxinsumo"] == alternativo),
+									f"Produçãoxxx{codigo}_{d_str}_{quant}xxxquant_utilizada"
+								] = -quant_alt
+								simulador_blocos.loc[
+									(simulador_blocos[f"Produçãoxxx{codigo}_{d_str}_{quant}xxxinsumo"] == cod_negativo),
+									f"Produçãoxxx{codigo}_{d_str}_{quant}xxxquant_utilizada"
+								] += quant_alt
+								quant_neg -= quant_alt
+
+		simulador_blocos[f"Resultadoxxx{d_str}xxxqtd"] = simulador_blocos[colunas_para_somar].sum(axis=1).round(5)
+		col_resultado_anterior = f"Resultadoxxx{d_str}xxxqtd"
+									
+		negativos_mp = None
+		cod_negativo = None
+		quant_neg = None
+		alternativo_de = None
+		quant_alt = None
+
+		bloco_estoque = None
+		bloco_producao = None
+		bloco_pedidos = None
+		colunas_para_somar = []
+
+	simulador_blocos.insert(0,f"-xxx{data_estoque}xxxExclusividade",simulador[f"-xxx{data_estoque}xxxExclusividade"])
+	simulador = simulador_blocos
+	simulador_blocos = None
+
+
+	# EXCLUSIVO 2
+	simulador.fillna({f"-xxx{data_estoque}xxxExclusividade":"EXCLUSIVO"}, inplace=True)	
+	
+	# SALVAR NO BANCO DE DADOS
 	if not codigo_aleatorio:
 		codigo_aleatorio = gerar_codigo_aleatorio_simulador(10)
 		request.session["codigo-aleatorio"] = codigo_aleatorio
+
 	sqlite_conn = sqlite3.connect('db.sqlite3')
 	simulador.to_sql(name=codigo_aleatorio, con=sqlite_conn, if_exists="replace", index=True)
+	sqlite_conn.close()
 	
 	simulador = simulador.fillna('')
 
-	cat_anterior = ''
-	dat_anterior = ''
-	cabecalhos = {
-		"indice":{},
-		"categoria":{},
-		"data":{},
-		"campo":{},
-	}
-	for col in simulador.columns:
-		i, cat, dat, campo = col.split("xxx")
-		if cat == cat_anterior:
-			cabecalhos["categoria"][cat] += 1
-		else:
-			cabecalhos["categoria"].update({cat:1})
-		cat_anterior = cat
+	# CABEÇALHOS
+	cabecalhos, rows = get_cabecalhos_e_rows_simulador_de_producao(simulador)
 
-		if dat == dat_anterior:
-			cabecalhos["data"][dat] += 1
-		else:
-			cabecalhos["data"].update({dat:1})
-		dat_anterior = dat
-
-		cabecalhos["campo"].update({campo:1})
-
-
-	rows = []
-	for i, row in simulador.iterrows():
-		row_data = row.to_dict()
-		row_data["index"] = i
-		rows.append(row_data)
-	
+	colunas_fixas = get_colunas_fixas(data_estoque)
+	campos_alteraveis = get_campos_alteraveis()
 
 	context = {
-		"inicial":False,
+		"caller":"adicionar_nova_producao",
 		"cabecalhos":cabecalhos,
 		"rows":rows,
 		"codigo_aleatorio": codigo_aleatorio,
+		"tabela_salva":tabela_salva.split("_",1)[1],
+		"colunas_fixas": colunas_fixas,
+		"campos_alteraveis": campos_alteraveis,
 	}
 
 	
@@ -556,11 +721,13 @@ def ordenar_colunas_por_data(colunas):
 
 	def extrair_data(col):
 		partes = col.split("xxx")
-		if partes[0] in ["Estoque","Pedidos"]:
+		if partes[0] in ["Estoque","Pedidos","Resultado"]:
 			parte=pd.to_datetime(partes[1], format="%d-%m-%Y")
 		elif partes[0] == "Produção":
 			partes2 = partes[1].split("_")
 			parte = pd.to_datetime(partes2[1], format="%d-%m-%Y")
+		elif partes[2] == "Exclusividade":
+			parte=pd.to_datetime(partes[1], format="%d-%m-%Y")
 
 		datas_extraidas.add(parte)
 		return parte
@@ -568,3 +735,135 @@ def ordenar_colunas_por_data(colunas):
 	datas_encontradas = sorted(datas_extraidas)
 	
 	return colunas_ordenadas, datas_encontradas
+
+
+
+
+@api_view(["POST"])
+def salvar_simulacao(request):
+
+	body = request.data
+	codigo_aleatorio = body.get("codigo_aleatorio")
+	nome_da_simulacao = body.get("nome_da_simulacao")
+
+	nome_da_simulacao = f"simulacao_{nome_da_simulacao.strip()}"
+
+	query_verificacao = f"SELECT name FROM sqlite_master WHERE type='table' AND name='{nome_da_simulacao}'"
+
+	query = f"CREATE TABLE [{nome_da_simulacao}] as SELECT * FROM [{codigo_aleatorio}]"
+
+	try:
+		sqlite_conn = sqlite3.connect('db.sqlite3')
+		cursor = sqlite_conn.cursor()
+
+		# VERIFICAR SE TABELA EXISTE
+		cursor.execute(query_verificacao)
+		if cursor.fetchone() is not None:
+			cursor.execute(f"DROP TABLE [{nome_da_simulacao}]")
+
+		cursor.execute(query)
+		sqlite_conn.commit()
+		response = {"sucesso": True}
+	except Exception as e:
+		response = {"erro":str(e)}
+
+	sqlite_conn.close()
+
+	return Response(response)
+
+
+
+
+def get_colunas_fixas(data_str):
+	return [
+		f"-xxx{data_str}xxxExclusividade",
+		f"Estoquexxx{data_str}xxxcodigo",
+		f"Estoquexxx{data_str}xxxtipo",
+		"Exclusividade",
+		"codigo","tipo"
+	]
+
+def get_campos_alteraveis():
+	return json.dumps([
+		"Ttl Est","quant_utilizada","quant_pedidos"
+	])
+
+
+
+
+def trazer_simulacao(request):
+	tabela_salva = request.POST.get("simulacoes")
+	sqlite_conn = sqlite3.connect("db.sqlite3")
+
+	if not tabela_salva:
+		return redirect(reverse("ghost:simulador-de-producao"))
+
+	query = f"SELECT * FROM [simulacao_{tabela_salva}]"
+
+	codigo_aleatorio = gerar_codigo_aleatorio_simulador(10)
+
+	simulador = pd.read_sql(query, sqlite_conn)
+	if simulador.empty:
+		messages.error(request,"Problemas ao carregar esta tabela")
+		return redirect(reverse("ghost:simulador-de-producao"))
+	
+	simulador.drop(columns=["index"],inplace=True)
+	simulador = simulador.fillna('')
+
+	# DATA ESTOQUE
+	data_estoque = simulador.filter(like="Estoque").filter(like="codigo").columns[0].split("xxx")[1]
+
+	cabecalhos, rows = get_cabecalhos_e_rows_simulador_de_producao(simulador)
+	colunas_fixas = get_colunas_fixas(data_estoque)
+	campos_alteraveis = get_campos_alteraveis()
+
+	context = {
+		"caller":"trazer_simulacao",
+		"cabecalhos":cabecalhos,
+		"rows":rows,
+		"codigo_aleatorio": codigo_aleatorio,
+		"tabela_salva":tabela_salva,
+		"colunas_fixas": colunas_fixas,
+		"campos_alteraveis": campos_alteraveis,
+	}
+
+	return render(request, "ghost/simuladordeproducao/simuladordeproducao.html", context)
+
+
+
+
+
+
+def get_cabecalhos_e_rows_simulador_de_producao(simulador):
+	# CABEÇALHOS
+	cat_anterior = ''
+	dat_anterior = ''
+	cabecalhos = {
+		"categoria":[],
+		"data":[],
+		"campo":[],
+	}
+	for col in simulador.columns:
+		cat, dat, campo = col.split("xxx")
+		if cat == cat_anterior:
+			cabecalhos["categoria"][len(cabecalhos["categoria"])-1][cat] += 1
+		else:
+			cabecalhos["categoria"].append({cat:1})
+		cat_anterior = cat
+
+		if dat == dat_anterior:
+			cabecalhos["data"][len(cabecalhos["data"])-1][dat] += 1
+		else:
+			cabecalhos["data"].append({dat:1})
+		dat_anterior = dat
+
+		cabecalhos["campo"].append({campo:1})
+
+
+	rows = []
+	for i, row in simulador.iterrows():
+		row_data = row.to_dict()
+		row_data["index"] = i
+		rows.append(row_data)
+
+	return cabecalhos, rows

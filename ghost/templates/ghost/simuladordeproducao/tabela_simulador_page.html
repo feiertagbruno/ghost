@@ -1,34 +1,22 @@
 <div class="box-tabela-simulador" id="box-tabela-simulador-id">
-	<div class="titulo-tabela">Simulador de Produção</div>
 
 	{% comment %} FORM DAS CHECKBOX DOS ARMAZÉNS {% endcomment %}
 	<form 
 		id="form-tabela-simulador-id" 
-		class="form-tabela" 
-		hx-post="{% url "ghost:reprocessar-tabela" %}"
-		hx-target="#tabela-simulador-id"
-		hx-swap="outerHtml"
+		class="form-tabela fixed-left" 
 	>
-		<textarea name="tabela-simulador-html" id="tabela-simulador-html-id" class="hidden"></textarea>
 		<div class="parte-superior-div-simulador">
-			<div class="box-armazens">
-				{% for arm in armazens %}
-				<div class="armazem-checkbox-div">
-					<label for="{{arm}}">{{arm}}</label>
-					<input type="checkbox" id="{{arm}}"
-					value="{{arm}}"
-					class="armazem-checkbox"
-					name = "armazem-checkbox"
-					{% if arm in armazens_visiveis %}checked{% endif %}
-					>
-				</div>
-				{% endfor %}
+			<div class="no-wrap">
+				<label for="nome-da-simulacao-id">Nome da Simulação:</label>
+				<input type="text" name="nome-da-simulacao" id="nome-da-simulacao-id" maxlength="15" value="{{tabela_salva}}">
 			</div>
-			{% csrf_token %}
+				{% csrf_token %}
 			
-			<button class="botao-pequeno" type="submit">Reprocessar</button>
+			<button id="salvar-simulacao-id" class="botao-pequeno botao-salvar-simulacao">Salvar</button>
 		</div>
+		<div class="mensagem-tabela-simulador hidden"></div>
 	</form>
 
 	{% include "ghost/simuladordeproducao/tabela_simulador.html" %}
+	<input type="hidden" name="campos-alteraveis" id="campos-alteraveis-id" value="{{campos_alteraveis}}">
 </div>

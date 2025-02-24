@@ -7,47 +7,63 @@
 
 {% block content %}
 
-<form 
-	id="form-multi-id" 
-	class="form form-simulador-de-producao" 
-	method="post" 
-	action="{% url "ghost:adicionar-producao" %}"
->
-	{% csrf_token %}
-	{% comment %} codigo-aleatorio é utilizado para identificar a tabela do 
-		banco que será salva a simulação {% endcomment %}
-	<input type="hidden" name="codigo-aleatorio" id="codigo-aleatorio-id" value="{{codigo_aleatorio}}">
-	{% comment %} este codigo-identificador é utilizado para consultar a 
-		porcentagem de andamento do processamento na tela de 'Processando' {% endcomment %}
-	<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
+<div class="titulo-form borda-dupla-inferior titulo-simulador-de-producao">Simulador de Produção</div>
+<div class="primeira-linha-simulador">
+	<form 
+		id="form-multi-id" 
+		class="form form-simulador-de-producao" 
+		method="post" 
+		action="{% url "ghost:adicionar-producao" %}"
+	>
+		{% csrf_token %}
+		{% comment %} codigo-aleatorio é utilizado para identificar a tabela do 
+			banco que será salva a simulação {% endcomment %}
+		<input type="hidden" name="codigo-aleatorio" id="codigo-aleatorio-id" value="{{codigo_aleatorio}}">
+		{% comment %} este codigo-identificador é utilizado para consultar a 
+			porcentagem de andamento do processamento na tela de 'Processando' {% endcomment %}
+		<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
 
-	<span class="titulo-form borda-dupla-inferior">Simulador de Produção</span>
+		<input type="hidden" name="tabela-salva" id="tabela-salva-id">
 
-	<div class="flex-flow-row linha-form hidden">
-			<label for="csv-plan-id">Arquivo CSV - Planejamento Produção: </label>
-			<input type="file" name="csv-plan" id="csv-plan-id"></input>
-	</div>
+		{% comment %} <div class="flex-flow-row linha-form hidden">
+				<label for="csv-plan-id">Arquivo CSV - Planejamento Produção: </label>
+				<input type="file" name="csv-plan" id="csv-plan-id"></input>
+		</div> {% endcomment %}
 
-	<div class="flex-flow-row linha-form campos-simulador-producao">
-		<div class="no-wrap">
-			<label for="codigo-produto-id">Código do Produto:</label>
-			<input type="text" name="codigo-produto" id="codigo-produto-id" maxlength="15">
+		<div class="flex-flow-row linha-form campos-simulador-producao">
+			<div class="no-wrap">
+				<label for="codigo-produto-id">Código do Produto:</label>
+				<input type="text" name="codigo-produto" id="codigo-produto-id" maxlength="15">
+			</div>
+			<div class="no-wrap">
+				<label for="data-producao-id">Data da Produção:</label>
+				<input type="date" name="data-producao" id="data-producao-id" value="{{maior_data}}">
+			</div>
+			<div class="no-wrap">
+				<label for="quantidade-id">Quantidade:</label>
+				<input type="number" step="1" name="quantidade" id="quantidade-id">
+			</div>
+			<button id="botao-multi-simples" class="botao-padrao botao-simular" type="submit">Simular</button>
 		</div>
-		<div class="no-wrap">
-			<label for="data-producao-id">Data da Produção:</label>
-			<input type="date" name="data-producao" id="data-producao-id" value="{{maior_data}}">
-		</div>
-		<div class="no-wrap">
-			<label for="quantidade-id">Quantidade:</label>
-			<input type="number" step="1" name="quantidade" id="quantidade-id">
-		</div>
-	</div>
-	<button id="botao-multi-simples" class="botao-padrao" type="submit">Adicionar Produção</button>
-</form>
+	</form>
+	<form action="{% url "ghost:trazer-simulacao" %}" id="form-trazer-simulacao-salva-id" class="form-trazer-simulacao" method="POST">
+		{% csrf_token %}
+		<button id="botao-trazer-simulacao-id" class="botao-padrao background-cinza" type="submit">Trazer Simulação Salva</button>
+		{% if tabelas %}
+		<select name="simulacoes" id="simulacoes-id" class="hidden">
+			<option value="">Selecione a Simulação</option>
+			{% for tb in tabelas %}
+			<option value="{{tb}}">{{tb}}</option>
+			{% endfor %}
+		</select>
+		{% endif %}
+	</form>
+</div>
 
-{% if not inicial %}
+{% if caller != 'inicial' %}
 {% include "ghost/simuladordeproducao/tabela_simulador_page.html" %}
 {% endif %}
+<input type="hidden" name="caller" id="caller-id" value="{{caller}}">
 
 <script src="{% static "ghost/js/simuladorDeProducao.js" %}"></script>
 

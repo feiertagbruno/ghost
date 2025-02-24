@@ -32,6 +32,7 @@
 }
 
 .botao-pequeno {
+	height: fit-content;
 	border-radius: 5px;
 	padding: .3rem .5rem;
 	transition: all 300ms ease-in-out;
@@ -42,3 +43,36 @@
 	background-color: rgba(192,0,0,0.8);
 	color: wheat;
 }
+
+.background-cinza {
+	background: rgb(207, 207, 207);
+}
+
+.background-verde {
+	background: rgba(140, 240, 182, 0.836);
+}
+
+.background-amarelo {
+	background: rgba(255, 255, 0, 0.623);
+}
+
+.background-vermelho-claro {
+	background: rgba(255, 151, 151, 0.76);
+}
+
+.background-white {
+	background: white;
+}
+
+.color-vermelho {
+	color: brown;
+}
+
+.color-verde {
+	color: green;
+}
+
+.transition-500 {
+	transition: all 500ms ease-in-out;
+}
+
