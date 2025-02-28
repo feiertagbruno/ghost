@@ -37,15 +37,26 @@
 			</div>
 			<div class="no-wrap">
 				<label for="data-producao-id">Data da Produção:</label>
-				<input type="date" name="data-producao" id="data-producao-id" value="{{maior_data}}">
+				<input type="date" name="data-producao" id="data-producao-id" value="{{data_str_nav}}">
 			</div>
 			<div class="no-wrap">
 				<label for="quantidade-id">Quantidade:</label>
 				<input type="number" step="1" name="quantidade" id="quantidade-id">
 			</div>
-			<button id="botao-multi-simples" class="botao-padrao botao-simular" type="submit">Simular</button>
+			<div class="flex-flow-column">
+			<div class="no-wrap">
+				<label for="explode-pis-id">Explode PIs:</label>
+				<input type="checkbox" name="explode-pis" id="explode-pis-id" checked>
+			</div>
+			<div class="no-wrap">
+				<label for="abre-detalhamento-id">Abre detalhamento:</label>
+				<input type="checkbox" name="abre-detalhamento" id="abre-detalhamento-id" checked>
+			</div>
+			</div>
+		<button id="botao-multi-simples" class="botao-padrao botao-simular" type="submit">Simular</button>
 		</div>
-	</form>
+</form>
+	{% if caller == "inicial" %}
 	<form action="{% url "ghost:trazer-simulacao" %}" id="form-trazer-simulacao-salva-id" class="form-trazer-simulacao" method="POST">
 		{% csrf_token %}
 		<button id="botao-trazer-simulacao-id" class="botao-padrao background-cinza" type="submit">Trazer Simulação Salva</button>
@@ -58,6 +69,7 @@
 		</select>
 		{% endif %}
 	</form>
+	{% endif %}
 </div>
 
 {% if caller != 'inicial' %}

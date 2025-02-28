@@ -1,5 +1,4 @@
 const codigo_aleatorio = document.getElementById("codigo-aleatorio-id").value
-const csrf = document.querySelector("input[name='csrfmiddlewaretoken']").value
 const form_tabela_simulador = document.getElementById("form-tabela-simulador-id")
 const btn_salvar_simulacao = document.getElementById("salvar-simulacao-id")
 const nome_da_simulacao = form_tabela_simulador.querySelector("#nome-da-simulacao-id")
@@ -38,7 +37,7 @@ document.ondblclick = (el) => {
 }
 
 async function salva_valor_no_bd(codigo_aleatorio, unique, novo_valor, el, input) {
-	const response = await fetch("/alterasimuladordeproducao/", {
+	const response = await fetch("/ghost/materiais/alterasimuladordeproducao/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -85,7 +84,7 @@ btn_salvar_simulacao.onclick = e => {
 
 async function salvar_simulacao(codigo_aleatorio, nome_da_simulacao, mensagem_tabela_simulador) {
 	try {
-		const response = await fetch("/salvarsimulacao/", {
+		const response = await fetch("/ghost/materiais/salvarsimulacao/", {
 			method:"POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -100,7 +99,7 @@ async function salvar_simulacao(codigo_aleatorio, nome_da_simulacao, mensagem_ta
 
 		if (data.sucesso) {
 			add_msg_mensagem_tabela_simulador(
-				mensagem_tabela_simulador, "Simulação salva com sucesso", "color-verde"
+				mensagem_tabela_simulador, "Simulação salva.", "color-verde"
 			)
 			finalizacao_salvar_tabela(nome_da_simulacao)
 			
@@ -119,7 +118,7 @@ async function salvar_simulacao(codigo_aleatorio, nome_da_simulacao, mensagem_ta
 
 }
 function finalizacao_salvar_tabela(nome_da_simulacao) {
-	nome_da_simulacao.setAttribute("readOnly", true)
+	// nome_da_simulacao.setAttribute("readOnly", true)
 	nome_da_simulacao.classList.remove("background-amarelo")
 	nome_da_simulacao.classList.add("background-verde")
 	document.getElementById("tabela-salva-id").value = nome_da_simulacao.value.trim()
@@ -127,7 +126,6 @@ function finalizacao_salvar_tabela(nome_da_simulacao) {
 	btn_salvar_simulacao.style.cursor = "default"
 	btn_salvar_simulacao.style.backgroundColor = "white"
 	btn_salvar_simulacao.style.color = "lightgray"
-	botao_trazer_simulacao.style.display = "none"
 }
 
 

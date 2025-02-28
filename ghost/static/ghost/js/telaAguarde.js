@@ -1,4 +1,5 @@
 let tentativa = 0
+var continua_buscando = true
 
 function getRandomMudaTexto() {
 	let num;
@@ -55,6 +56,7 @@ function formata_tela_aguarde(tela_aguarde) {
 	tela_aguarde.style.flexFlow = "column"
 	tela_aguarde.style.justifyContent = "center"
 	tela_aguarde.style.alignItems = "center"
+	tela_aguarde.style.zIndex = '1000'
 
 	return tela_aguarde
 }
@@ -67,6 +69,7 @@ function formata_elemento_tela_aguarde(elemento) {
 }
 
 async function buscar_processamento(tela_aguarde, porcentagem, mensagem1, mensagem2, csrf, codigo, caller) {
+	if (!continua_buscando) return
 	try {
 		const response = await fetch("/buscarprocessamento/", {
 			method: "POST",
@@ -105,6 +108,7 @@ function mostra_tela_aguarde(csrf, codigo, caller) {
 	porcentagem = formata_elemento_tela_aguarde(porcentagem)
 	let mensagem1 = document.createElement("div")
 	mensagem1 = formata_elemento_tela_aguarde(mensagem1)
+	mensagem1.textContent = "Processando"
 	let mensagem2 = document.createElement("div")
 	mensagem2 = formata_elemento_tela_aguarde(mensagem2)
 
@@ -113,18 +117,25 @@ function mostra_tela_aguarde(csrf, codigo, caller) {
 	tela_aguarde.append(mensagem2)
 
 	muda_texto_tela_aguarde(tela_aguarde)
+	continua_buscando = true
 	setTimeout(buscar_processamento,500, tela_aguarde, porcentagem, mensagem1, mensagem2, csrf, codigo, caller)
 
 }
 
 function remove_texto_tela_aguarde() {
-	tela_aguarde.remove()
+	const mensagem_aguarde = document.getElementById("tela-aguarde")
+	if (mensagem_aguarde) mensagem_aguarde.remove()
+	continua_buscando = false
 }
 /**
  * 
  * @param {"message-error" | "message-info" | "message-success"} style 
  */
 function mensagem_padrao(style, mensagem) {
+
+	const mensagem_ja_existente = document.querySelector(".message")
+	if (mensagem_ja_existente) mensagem_ja_existente.remove()
+
 	const mensagem_padrao = document.createElement("div")
 	mensagem_padrao.textContent = mensagem
 	mensagem_padrao.classList.add("message")

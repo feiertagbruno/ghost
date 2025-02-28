@@ -161,7 +161,7 @@ def explode_estrutura(
 
 	if solicitante == "simulador":
 		estrutura = estrutura[[
-			"codigo_original","descricao_cod_original","tipo_original",
+			"codigo_original",
 			"insumo", "alternativo_de", "ordem_alt", "quant_utilizada"
 		]]
 

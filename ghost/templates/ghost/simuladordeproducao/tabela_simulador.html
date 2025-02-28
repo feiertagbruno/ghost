@@ -1,33 +1,60 @@
 {% load static %}
+{% load custom_filters %}
 
 <table class="tabela-simulador" id="tabela-simulador-id">
 	<thead class="cabecalho-tabela">
 
 		<tr>
 			{% for item in cabecalhos.categoria %}
-				{% for col, colspan in item.items %}
-				<th colspan="{{colspan}}" >{{col}}</th>
+				{% for col, dados in item.items %}
+				{% with colspan=dados.0%}
+				{% with cabecalho=dados.1 %}
+				{% comment %} {% if 'Produção' not in cabecalho or data_str in cabecalho %} {% endcomment %}
+				<th
+					colspan="{{colspan}}" 
+				>
+					{{col}}
+				</th>
+				{% comment %} {% endif %} {% endcomment %}
+				{% endwith %}
+				{% endwith %}
 				{% endfor %}
 			{% endfor %}
 		</tr>
 
 		<tr>
 			{% for item in cabecalhos.data %}
-				{% for col, colspan in item.items %}
-				<th colspan="{{colspan}}">{{col}}</th>
+				{% for col, dados in item.items %}
+				{% with colspan=dados.0 %}
+				{% with cabecalho=dados.1 %}
+				{% comment %} {% if 'Produção' not in cabecalho or data_str in cabecalho %} {% endcomment %}
+				<th 
+					colspan="{{colspan}}" 
+				>
+					{{col}}
+				</th>
+				{% comment %} {% endif %} {% endcomment %}
+				{% endwith %}
+				{% endwith %}
 				{% endfor %}
 			{% endfor %}
 		</tr>
 
 		<tr>
 			{% for item in cabecalhos.campo %}
-				{% for col, colspan in item.items %}
+				{% for col, dados in item.items %}
+				{% with colspan=dados.0 %}
+				{% with cabecalho=dados.1 %}
+				{% comment %} {% if 'Produção' not in cabecalho or data_str in cabecalho %} {% endcomment %}
 				<th 
 					{% if col in colunas_fixas %}
 					class="fixed-left-col"
 					{% endif %}
 					colspan="{{colspan}}"
 				>{{col}}</th>
+				{% comment %} {% endif %} {% endcomment %}
+				{% endwith %}
+				{% endwith %}
 				{% endfor %}
 			{% endfor %}
 		</tr>
@@ -39,7 +66,7 @@
 			<tr>
 				{% for col, value in row.items %}
 					{% if 'index' not in col %}
-
+					{% comment %} {% if 'Produção' not in col or data_str in col %} {% endcomment %}
 					<td
 							{% if col in colunas_fixas %}
 							class="fixed-left-col background-white"
@@ -49,11 +76,16 @@
 							class="background-vermelho-claro color-vermelho"
 							{% endif %}
 							{% endif %}
+							{% if col == 'Estoquexxx'|add:data_estoque|add:'xxxcodigo' %}
+							{% with 'Estoquexxx'|add:data_estoque|add:'xxxdescricao' as col_descricao %}
+							title="{{row|get_attr:col_descricao}}"
+							{% endwith %}
+							{% endif %}
 							data-unique="{{col}}|{{row.index}}"
 					>
 						{{value}}
 					</td>
-
+					{% comment %} {% endif %} {% endcomment %}
 					{% endif %}
 				{% endfor %}
 			</tr>

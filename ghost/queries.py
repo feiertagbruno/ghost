@@ -468,7 +468,7 @@ SELECT
 	Produto codigo,
 	CONVERT(VARCHAR, CONVERT(DATE,
 		CASE 
-			WHEN Entrega < @HOJE THEN DATEADD(DAY,1,@HOJE)
+			WHEN Entrega < @HOJE THEN DATEADD(DAY,3,@HOJE)
 			ELSE Entrega
 		END
 	), 105) entrega,

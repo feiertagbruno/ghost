@@ -67,7 +67,8 @@ select {
 }
 
 label {
-	padding: 0.5rem 1.5rem;
+	padding: 0.5rem;
+	padding-left: 1rem;
 	place-content: top;
 	place-self: top;
 }
