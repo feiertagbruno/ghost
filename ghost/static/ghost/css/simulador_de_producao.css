@@ -103,3 +103,28 @@
 .botao-salvar-simulacao {
 	margin-left: 1rem;
 }
+
+.form-phase-out {
+	display: flex;
+	flex-flow: row;
+	margin-top: 1rem;
+	place-self: center;
+	width: 88vw;
+	justify-content: center;
+	align-items: start;
+	gap: 1rem;
+}
+
+.codigos-produtos-phase-out {
+	width: 40rem;
+}
+
+.campo-produtos-phase-out {
+	display: flex;
+	flex-flow: column;
+}
+
+.botao-carregar-phase-out {
+	align-self: start;
+	margin-left: 2rem;
+}

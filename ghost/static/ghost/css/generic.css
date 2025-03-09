@@ -1,6 +1,6 @@
 .flex-flow-row {
 	display: flex;
-	flex-flow: row wrap;
+	flex-flow: row;
 	align-items: center;
 }
 

@@ -1,6 +1,6 @@
-<div class="box-tabela-simulador" id="box-tabela-simulador-id">
 
 	{% comment %} FORM DAS CHECKBOX DOS ARMAZÉNS {% endcomment %}
+	{% if caller != "phase_out" %}
 	<form 
 		id="form-tabela-simulador-id" 
 		class="form-tabela fixed-left" 
@@ -16,7 +16,6 @@
 			<div class="mensagem-tabela-simulador hidden"></div>
 		</div>
 	</form>
+	{% endif %}
 
 	{% include "ghost/simuladordeproducao/tabela_simulador.html" %}
-	<input type="hidden" name="campos-alteraveis" id="campos-alteraveis-id" value="{{campos_alteraveis}}">
-</div>

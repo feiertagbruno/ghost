@@ -73,7 +73,11 @@
 </div>
 
 {% if caller != 'inicial' %}
-{% include "ghost/simuladordeproducao/tabela_simulador_page.html" %}
+<div class="box-tabela-simulador" id="box-tabela-simulador-id">
+	{% include "ghost/simuladordeproducao/tabela_simulador_page.html" %}
+	<input type="hidden" name="campos-alteraveis" id="campos-alteraveis-id" value="{{campos_alteraveis}}">
+</div>
+
 {% endif %}
 <input type="hidden" name="caller" id="caller-id" value="{{caller}}">
 

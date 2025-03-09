@@ -11,7 +11,7 @@ from io import StringIO
 from numpy import nan
 import json
 from ghost.queries import get_query_estoque_atual
-from ghost.views.estruturas import explode_estrutura, forma_string_codigos
+from ghost.views.estruturas import explode_estrutura, forma_string_codigos, gerar_multiestruturas
 from ghost.utils.funcs import (
 	get_engine, tratamento_data_referencia, gerar_codigo_aleatorio_simulador,
 	get_info_produtos
@@ -116,11 +116,7 @@ def adicionar_producao(request):
 	hoje = hoje_date.strftime('%d-%m-%Y')
 	
 	# ESTOQUE NOVOS CABEÇALHOS
-	novos_cabecalhos = {}
-	for col in estoque_pivot.columns:
-		novos_cabecalhos.update({col:f"Estoquexxx{hoje}xxx{col}"})
-
-	estoque_pivot = estoque_pivot.rename(columns=novos_cabecalhos)
+	estoque_pivot = padronizar_cabecalhos_estoque(estoque_pivot, hoje)
 	
 	# ESTRUTURA NOVOS CABEÇALHOS
 	data_str = data.strftime('%d-%m-%Y')
@@ -138,34 +134,18 @@ def adicionar_producao(request):
 	simulador = resultado_pi_pa_produzido(simulador,hoje,codigo,data_str,quant)
 
 	# PREENCHER PRODUTOS QUE VIERAM SOMENTE NA BOM
-	produtos_sem_estoque = simulador.loc[simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"].isna(),:]
-	if not produtos_sem_estoque.empty:
-		# simulador.replace({f"Estoquexxx{hoje}xxxcodigo":{"":nan}},inplace=True)
-		simulador.loc[:,f"Estoquexxx{hoje}xxxcodigo"] = simulador[f"Estoquexxx{hoje}xxxcodigo"]\
-			.combine_first(simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"])
-	produtos_sem_estoque = None
+	simulador = preencher_produtos_sem_estoque(
+		simulador, codigo, data_str, quant, hoje
+	)
 
 	# PEDIDOS
-	pedidos = get_pedidos(
-		solicitante="simulador",
-		engine=engine
+	pedidos_pivot = get_pedidos_pivot(
+		engine=engine,
+		coluna_codigos=simulador[f"Estoquexxx{hoje}xxxcodigo"]
 	)
-	pedidos_filtrados = pedidos.loc[
-		pedidos[f"codigo"].isin(simulador[f"Estoquexxx{hoje}xxxcodigo"]),:
-	]
-	pedidos_pivot = pedidos_filtrados.pivot_table(
-		index="codigo", 
-		columns="entrega", 
-		values="quant",
-		aggfunc="sum"
-	).reset_index()
 
 	# PEDIDOS NOVOS CABEÇALHOS
-	novos_cabecalhos = {}
-	for col in pedidos_pivot.columns:
-		novos_cabecalhos.update({col:f"Pedidosxxx{col}xxxquant_pedidos"})
-
-	pedidos_pivot = pedidos_pivot.rename(columns=novos_cabecalhos)
+	pedidos_pivot = padronizar_cabecalhos_pedidos(pedidos_pivot)
 
 	# PEDIDOS MERGE
 	simulador = simulador.merge(
@@ -224,12 +204,7 @@ def adicionar_producao(request):
 	simulador.insert(0,f"-xxx{hoje}xxxExclusividade","EXCLUSIVO")
 
 	# SALVAR NO BANCO DE DADOS
-	if not codigo_aleatorio:
-		codigo_aleatorio = gerar_codigo_aleatorio_simulador(10)
-		request.session["codigo-aleatorio"] = codigo_aleatorio
-	sqlite_conn = sqlite3.connect('db.sqlite3')
-	simulador.to_sql(name=codigo_aleatorio, con=sqlite_conn, if_exists="replace", index=True)
-	sqlite_conn.close()
+	request = salvar_dataframe_no_bd(request,simulador,"simudraft",codigo_aleatorio)
 	
 	simulador = simulador.fillna('')
 
@@ -467,12 +442,9 @@ def adicionar_nova_producao(request, tabela_salva):
 	simulador = resultado_pi_pa_produzido(simulador,data_estoque,codigo,data_str,quant)
 
 	# PREENCHER PRODUTOS QUE VIERAM SOMENTE NA BOM
-	produtos_sem_estoque = simulador.loc[simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"].isna(),:]
-	if not produtos_sem_estoque.empty:
-		# simulador.replace({f"Estoquexxx{hoje}xxxcodigo":{"":nan}},inplace=True)
-		simulador.loc[:,f"Estoquexxx{data_estoque}xxxcodigo"] = simulador[f"Estoquexxx{data_estoque}xxxcodigo"]\
-			.combine_first(simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"])
-	produtos_sem_estoque = None
+	simulador = preencher_produtos_sem_estoque(
+		simulador, codigo, data_str, quant, data_estoque
+	)
 
 
 	# ORDENAR COLUNAS POR DATA
@@ -527,13 +499,12 @@ def adicionar_nova_producao(request, tabela_salva):
 	simulador.fillna({f"-xxx{data_estoque}xxxExclusividade":"EXCLUSIVO"}, inplace=True)	
 	
 	# SALVAR NO BANCO DE DADOS
-	if not codigo_aleatorio:
-		codigo_aleatorio = gerar_codigo_aleatorio_simulador(10)
-		request.session["codigo-aleatorio"] = codigo_aleatorio
-
-	sqlite_conn = sqlite3.connect('db.sqlite3')
-	simulador.to_sql(name=codigo_aleatorio, con=sqlite_conn, if_exists="replace", index=True)
-	sqlite_conn.close()
+	request = salvar_dataframe_no_bd(
+		request=request,
+		df=simulador,
+		inicial_tabela="simudraft",
+		codigo_aleatorio=codigo_aleatorio
+	)
 	
 	simulador = simulador.fillna('')
 
@@ -913,3 +884,276 @@ def verificar_alternativos_dos_itens_negativos(simulador, data_str, data_estoque
 		alternativo_de = None
 		quant_alt = None
 	return simulador
+
+
+
+
+def phase_out(request):
+	context = {
+		"caller": "inicial",
+	}
+	return render(request,"ghost/simuladordeproducao/phase_out.html", context)
+
+
+
+
+def carregar_estruturas_phase_out(request):
+
+	if request.method != "POST": return redirect(reverse("ghost:phase-out"))
+
+	produtos = request.POST.get("codigos-produtos")
+
+	if not produtos: return redirect(reverse("ghost:ghost"))
+
+	engine = get_engine()
+	codigo_aleatorio = request.session.get("codigo-aleatorio")
+
+	produtos = produtos.split("\r\n")
+	produtos_filtrados = [item for item in produtos if item != ""]
+
+	data_referencia = datetime.today().date()
+	data_str = data_referencia.strftime("%d-%m-%Y")
+	quant = 1
+
+	estruturas: pd.DataFrame
+	request, estruturas, _ = gerar_multiestruturas(
+		request= request,
+		produtos=produtos_filtrados,
+		data_referencia=data_referencia,
+		engine=engine,
+		caller="phase_out"
+	)
+
+	estruturas, coluna_insumo_estru = padronizar_cabecalhos_estrutura("Produtos Correntes", data_str,quant, estruturas)
+
+
+	# ESTOQUE
+	todos_os_codigos = forma_string_codigos(estruturas[coluna_insumo_estru].drop_duplicates())
+
+	query_estoque = get_query_estoque_atual()
+	estoque = pd.read_sql(text(query_estoque),engine, params={
+		"codigos": todos_os_codigos,
+	})
+
+	# FORMA O ESTOQUE_PIVOT
+	estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
+	arm_exist = [col for col in estoque_pivot.columns if len(col) == 2]
+	estoque_pivot["Ttl Est"] = estoque_pivot[arm_exist].sum(axis=1)
+
+	estoque_pivot = padronizar_cabecalhos_estoque(estoque_pivot, data_str)
+
+	estruturas = estruturas.merge(
+		estoque_pivot,how="left",
+		left_on=coluna_insumo_estru,
+		right_on=f"Estoquexxx{data_str}xxxcodigo"
+	)
+
+	# PEDIDOS
+	pedidos_pivot = get_pedidos_pivot(
+		engine=engine,
+		coluna_codigos=estruturas[coluna_insumo_estru],
+		abre_datas=False
+	)
+	pedidos_pivot = padronizar_cabecalhos_pedidos(pedidos_pivot)
+
+	estruturas = estruturas.merge(
+		pedidos_pivot,how="left",
+		left_on=coluna_insumo_estru,
+		right_on=f"Pedidosxxxcodigoxxxquant_pedidos"
+	)
+	# PEDIDOS fim
+
+	# SALVAR NO BD
+	request = salvar_dataframe_no_bd(
+		request=request,
+		df=estruturas,
+		inicial_tabela="phaseout",
+		codigo_aleatorio=codigo_aleatorio
+	)
+	# SALVAR NO BD fim
+
+	estruturas = estruturas.fillna("")
+
+	cabecalhos, rows = get_cabecalhos_e_rows_dataframe(estruturas)
+
+	context = {
+		"caller":"carregar_estruturas",
+		"cabecalhos":cabecalhos,
+		"rows":rows
+	}
+
+	return render(request, "ghost/simuladordeproducao/phase_out.html", context)
+
+
+
+
+def get_cabecalhos_e_rows_dataframe(
+		df:pd.DataFrame, reduz_campos:bool = True
+):
+
+	cabecalhos = []
+	cabecalhos_anteriores = []
+	size = len(df.columns[0].split("xxx"))
+	for i in range(size):
+		cabecalhos.append([])
+		cabecalhos_anteriores.append([])
+
+	for col in df.columns:
+		for i,subcol in enumerate(col.split("xxx")):
+			if subcol == cabecalhos_anteriores[i]:
+				cabecalhos[i][-1][subcol] = (cabecalhos[i][-1][subcol][0] + 1, col)
+			else:
+				cabecalhos[i].append({subcol:(1,col)})
+			cabecalhos_anteriores[i] = subcol
+
+
+	rows = []
+	for i, row in df.iterrows():
+		row_data = row.to_dict()
+		row_data["index"] = i
+		rows.append(row_data)
+
+
+	return cabecalhos, rows
+
+
+
+
+def carregar_phase_out(request):
+
+	if request.method != "POST": return redirect(reverse("ghost:phase-out"))
+
+	produtos = request.POST.get("codigos-produtos")
+
+	if not produtos: return redirect(reverse("ghost:phase-out"))
+
+	engine = get_engine()
+	codigo_aleatorio = request.session.get("codigo-aleatorio")
+
+	if not codigo_aleatorio: return redirect(reverse("ghost:phase-out"))
+
+	produtos = produtos.split("\r\n")
+	produtos_filtrados = [item for item in produtos if item != ""]
+
+	data_referencia = datetime.today().date()
+	data_str = data_referencia.strftime("%d-%m-%Y")
+	quant = 1
+
+	# PEGAR A TABELA SALVA NO BANCO
+	sqlite_conn = sqlite3.connect('db.sqlite3')
+	estruturas = pd.read_sql(f"SELECT * FROM [{codigo_aleatorio}]",sqlite_conn).drop(columns="index")
+	sqlite_conn.close()
+
+	estru_phase_out: pd.DataFrame
+	request, estru_phase_out, _ = gerar_multiestruturas(
+		request= request,
+		produtos=produtos_filtrados,
+		data_referencia=data_referencia,
+		engine=engine,
+		caller="phase_out"
+	)
+
+	# PHASE OUT PIVOT
+	ph_out_pivot = estru_phase_out.pivot(
+		index=["Exclusividade","insumo","alternativo_de","ordem_alt"],
+		columns="codigo_original",
+		values="quant_utilizada"
+	).reset_index()
+	estru_phase_out = None
+
+	# CABEÇALHOS PHASE OUT
+	novos_cabecalhos = {}
+	for col in ph_out_pivot.columns:
+		novos_cabecalhos.update({col:f"Phase Outxxx{data_str}xxx{col}"})
+	ph_out_pivot = ph_out_pivot.rename(columns=novos_cabecalhos)
+
+	novos_cabecalhos = None
+	col = None
+
+
+	estruturas = estruturas.fillna("")
+
+	cabecalhos, rows = get_cabecalhos_e_rows_dataframe(estruturas)
+
+	context = {
+		"caller":"carregar_phase_out",
+		"cabecalhos":cabecalhos,
+		"rows":rows
+	}
+
+	return render(request, "ghost/simuladordeproducao/phase_out.html", context)
+
+
+
+
+def preencher_produtos_sem_estoque(
+		simulador, codigo, data_str, quant, data_estoque
+):
+	produtos_sem_estoque = simulador.loc[simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"].isna(),:]
+	if not produtos_sem_estoque.empty:
+		# simulador.replace({f"Estoquexxx{hoje}xxxcodigo":{"":nan}},inplace=True)
+		simulador.loc[:,f"Estoquexxx{data_estoque}xxxcodigo"] = simulador[f"Estoquexxx{data_estoque}xxxcodigo"]\
+			.combine_first(simulador[f"Produçãoxxx{codigo}_{data_str}_{quant}xxxinsumo"])
+
+	return simulador
+
+
+
+
+def padronizar_cabecalhos_estoque(estoque_pivot, data_estoque):
+	novos_cabecalhos = {}
+	for col in estoque_pivot.columns:
+		novos_cabecalhos.update({col:f"Estoquexxx{data_estoque}xxx{col}"})
+
+	estoque_pivot = estoque_pivot.rename(columns=novos_cabecalhos)
+	return estoque_pivot
+
+
+
+
+def padronizar_cabecalhos_pedidos(pedidos_pivot):
+	novos_cabecalhos = {}
+	for col in pedidos_pivot.columns:
+		novos_cabecalhos.update({col:f"Pedidosxxx{col}xxxquant_pedidos"})
+
+	pedidos_pivot = pedidos_pivot.rename(columns=novos_cabecalhos)
+	return pedidos_pivot
+
+
+
+
+def get_pedidos_pivot(engine,coluna_codigos,abre_datas = True):
+	pedidos = get_pedidos(
+		solicitante="simulador",
+		engine=engine
+	)
+	pedidos_filtrados = pedidos.loc[
+		pedidos[f"codigo"].isin(coluna_codigos.drop_duplicates()),:
+	]
+	if abre_datas:
+		pedidos_pivot = pedidos_filtrados.pivot_table(
+			index="codigo", 
+			columns="entrega", 
+			values="quant",
+			aggfunc="sum"
+		).reset_index()
+	else:
+		pedidos_pivot = pedidos_filtrados.pivot_table(
+			index="codigo",
+			values="quant",
+			aggfunc="sum"
+		).reset_index()
+	return pedidos_pivot
+
+
+
+
+def salvar_dataframe_no_bd(request,df,inicial_tabela,codigo_aleatorio=None):
+	if not codigo_aleatorio:
+		codigo_aleatorio = gerar_codigo_aleatorio_simulador(10,inicial_tabela)
+		request.session["codigo-aleatorio"] = codigo_aleatorio
+	print(codigo_aleatorio)
+	sqlite_conn = sqlite3.connect('db.sqlite3')
+	df.to_sql(name=codigo_aleatorio, con=sqlite_conn, if_exists="replace", index=True)
+	sqlite_conn.close()
+	return request

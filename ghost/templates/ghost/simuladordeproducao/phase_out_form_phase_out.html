@@ -1,0 +1,30 @@
+<form 
+id="form-multi-id" 
+class="form-phase-out" 
+method="post" 
+action="{% url "ghost:carregar-phase-out" %}"
+>
+{% csrf_token %}
+
+<input type="hidden" name="codigo-aleatorio" id="codigo-aleatorio-id" value="{{codigo_aleatorio}}">
+<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
+
+<div class="campo-produtos-phase-out">
+  <label for="codigos-produtos-id">Carregar produtos para Phase Out: </label>
+  <textarea class="codigos-produtos-phase-out" name="codigos-produtos" id="codigos-produtos-id"></textarea>
+</div>
+
+<div class="flex-flow-column">
+  <div class="no-wrap">
+    <label for="explode-pis-id">Explode PIs:</label>
+    <input type="checkbox" name="explodir-pis" id="explode-pis-id" checked>
+  </div>
+  <div class="no-wrap">
+    <label for="abre-detalhamento-id">Abre detalhamento:</label>
+    <input type="checkbox" name="abre-detalhamento" id="abre-detalhamento-id" checked>
+  </div>
+</div>
+
+<button id="botao-multi-simples" class="botao-padrao botao-carregar-phase-out" type="submit">Carregar</button>
+
+</form>

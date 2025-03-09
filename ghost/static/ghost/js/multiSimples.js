@@ -1,4 +1,3 @@
-const textarea = document.getElementById('codigos-produtos-id');
 const botao_buscar = document.getElementById("botao-multi-simples")
 const form_multi = document.getElementById("form-multi-id")
 const csrf = document.querySelector("input[name='csrfmiddlewaretoken']").value
@@ -7,15 +6,6 @@ const explodir_pis = document.getElementById("explodir-pis-id")
 const data_referencia = document.getElementById("data-referencia-id")
 const traz_preco_futuro = document.getElementById("traz-preco-futuro-id")
 
-function getTodayDate() {
-	const today = new Date();
-	return today.toISOString().split("T")[0];
-}
-
-textarea.addEventListener('input', () => {
-	textarea.style.height = 'auto';
-	textarea.style.height = (textarea.scrollHeight) + 'px';
-});
 form_multi.addEventListener("submit", () => {
 	mostra_tela_aguarde(csrf, codigo_identificador, "multiestruturas")
 })

@@ -15,9 +15,9 @@ import string
 
 
 
-def gerar_codigo_aleatorio_simulador(tamanho=20):
+def gerar_codigo_aleatorio_simulador(tamanho=20, inicial = "simudraft"):
     caracteres = string.ascii_letters + string.digits + "_"
-    return 'simudraft' + ''.join(random.choices(caracteres, k=tamanho))
+    return inicial + ''.join(random.choices(caracteres, k=tamanho))
 
 
 

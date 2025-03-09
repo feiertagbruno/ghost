@@ -97,7 +97,7 @@ def explode_estrutura(
 		data_referencia = None,
 		engine = None, 
 		abre_todos_os_PIs = True, 
-		solicitante: Literal["multiestruturas","simulador"] = "multiestruturas"
+		solicitante: Literal["multiestruturas","simulador","phase_out"] = "multiestruturas"
 	):
 
 	data_referencia = tratamento_data_referencia(data_referencia)
@@ -138,7 +138,7 @@ def explode_estrutura(
 	
 	if solicitante == "multiestruturas":
 		estrutura, todos_os_codigos = acrescenta_alternativos(estrutura, engine, abre_todos_os_PIs)
-	elif solicitante == "simulador":
+	elif solicitante in ["simulador","phase_out"]:
 		estrutura, todos_os_codigos = acrescenta_alternativos_modelo_simulador(estrutura, engine)
 
 
@@ -159,7 +159,7 @@ def explode_estrutura(
 	estrutura["descricao_cod_original"] = str(descricao)
 	estrutura["tipo_original"] = str(tipo_original)
 
-	if solicitante == "simulador":
+	if solicitante in ["simulador","phase_out"]:
 		estrutura = estrutura[[
 			"codigo_original",
 			"insumo", "alternativo_de", "ordem_alt", "quant_utilizada"
@@ -362,8 +362,10 @@ def busca_menor_fechamento_por_data_ref(str_codigos, data_referencia, engine):
 
 
 def estrutura_simples(codigo, data_referencia, engine = None, 
-					  abre_todos_os_PIs = True, data_std = None, 
-					  considera_frete=True, traz_preco_futuro=False):
+		abre_todos_os_PIs = True, data_std = None, 
+		considera_frete=True, traz_preco_futuro=False,
+		caller: Literal["multiestruturas","simulador","phase_out"] = "multiestruturas"
+	):
 
 	if not engine:
 		engine = get_engine()
@@ -376,8 +378,12 @@ def estrutura_simples(codigo, data_referencia, engine = None,
 		codigo, 
 		data_std if data_std else data_referencia, 
 		engine, 
-		abre_todos_os_PIs
+		abre_todos_os_PIs,
+		solicitante=caller
 	)
+
+	if caller == "phase_out": return estrutura, pd.DataFrame()
+
 	descricao = estrutura.loc[0,"descricao_cod_original"]
 
 
@@ -703,7 +709,9 @@ def gerar_relatorio_excel_estruturas_simples(estrutura, custos_totais_produtos, 
 
 
 def gerar_multiestruturas(
-		request, produtos, data_referencia, engine = None, considera_frete=True, traz_preco_futuro=False
+		request, produtos, data_referencia, engine = None, 
+		considera_frete=True, traz_preco_futuro=False, 
+		caller: Literal["multiestruturas","phase_out"] = "multiestruturas"
 	):
 
 	if not engine:
@@ -742,14 +750,29 @@ def gerar_multiestruturas(
 				engine=engine,
 				abre_todos_os_PIs=abre_todos_os_PIs,
 				considera_frete=considera_frete,
-				traz_preco_futuro=traz_preco_futuro
+				traz_preco_futuro=traz_preco_futuro,
+				caller=caller
 			)
+
+			#EXCLUSIVIDADE
+			if caller == "phase_out":
+				if not compilado_estruturas.empty:
+					estrutura.loc[estrutura["insumo"].isin(compilado_estruturas["insumo"]),"Exclusividade"] = "COMUM"
+					estrutura.loc[~estrutura["insumo"].isin(compilado_estruturas["insumo"]),"Exclusividade"] = "EXCLUSIVO"
+					compilado_estruturas.loc[compilado_estruturas["insumo"].isin(estrutura["insumo"]),"Exclusividade"] = "COMUM"
+				else:
+					estrutura.insert(0,"Exclusividade","")
+					estrutura["Exclusividade"] = "EXCLUSIVO"
+				
+
 			compilado_estruturas = pd.concat([compilado_estruturas, estrutura])
-			compilado_custos_totais = pd.concat([compilado_custos_totais, custos_totais_produto])
+			if not custos_totais_produto.empty:
+				compilado_custos_totais = pd.concat([compilado_custos_totais, custos_totais_produto])
 		else:
 			messages.info(request, f"Produto {produto} contém um erro de digitação.")
 	
-	compilado_custos_totais = compilado_custos_totais.reset_index(drop=True)
+	if not compilado_custos_totais.empty:
+		compilado_custos_totais = compilado_custos_totais.reset_index(drop=True)
 	compilado_estruturas = compilado_estruturas.reset_index(drop=True)
 
 	return [request, compilado_estruturas, compilado_custos_totais]

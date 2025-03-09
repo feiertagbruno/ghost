@@ -1,5 +1,5 @@
-tabelas = []
+import pandas as pd
 
-
-if tabelas:
-    print("a")
+b = pd.DataFrame({"abc":["a","b","c"]})
+for i in enumerate(b.columns):
+    print(i)

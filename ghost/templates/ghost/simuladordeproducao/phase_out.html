@@ -1,0 +1,29 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'ghost/css/simulador_de_producao.css' %}">
+{% endblock css %}
+
+{% block content %}
+
+<div class="titulo-form borda-dupla-inferior titulo-simulador-de-producao">Phase Out</div>
+	{% if caller == "inicial" %}
+		{% include "ghost/simuladordeproducao/phase_out_form_inicial.html" %}
+	{% endif %}
+	{% if caller == "carregar_estruturas" %}
+		{% include "ghost/simuladordeproducao/phase_out_form_phase_out.html" %}
+	{% endif %}
+{% if caller != 'inicial' %}
+<div class="box-tabela-simulador" id="box-tabela-simulador-id">
+	{% include "ghost/simuladordeproducao/tabela.html" %}
+	<input type="hidden" name="campos-alteraveis" id="campos-alteraveis-id" value="{{campos_alteraveis}}">
+</div>
+{% endif %}
+  
+<input type="hidden" name="caller" id="caller-id" value="{{caller}}">
+
+<script src="{% static "ghost/js/phaseOut.js" %}"></script>
+<script src="{% static "ghost/js/textareaDinamico.js" %}"></script>
+
+{% endblock content %}
