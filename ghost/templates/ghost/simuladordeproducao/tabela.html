@@ -27,31 +27,16 @@
 
 	</thead>
 	<tbody>
-		{% for row in rows %}
+		{% for row,rowspan in rows %}
 			<tr>
 				{% for col, value in row.items %}
-					{% if 'index' not in col %}
-					{% comment %} {% if 'Produção' not in col or data_str in col %} {% endcomment %}
 					<td
-							{% if col in colunas_fixas %}
-							class="fixed-left-col background-white"
-							{% endif %}
-							{% if 'Resultado' in col %}
-							{% if value < 0 %}
-							class="background-vermelho-claro color-vermelho"
-							{% endif %}
-							{% endif %}
-							{% if col == 'Estoquexxx'|add:data_estoque|add:'xxxcodigo' %}
-							{% with 'Estoquexxx'|add:data_estoque|add:'xxxdescricao' as col_descricao %}
-							title="{{row|get_attr:col_descricao}}"
-							{% endwith %}
-							{% endif %}
-							data-unique="{{col}}|{{row.index}}"
+					{% if 'insumo' in col %}
+					rowspan="{{rowspan}}"
+					{% endif %}
 					>
 						{{value}}
 					</td>
-					{% comment %} {% endif %} {% endcomment %}
-					{% endif %}
 				{% endfor %}
 			</tr>
 		{% endfor %}

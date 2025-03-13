@@ -924,44 +924,51 @@ def carregar_estruturas_phase_out(request):
 		caller="phase_out"
 	)
 
-	estruturas, coluna_insumo_estru = padronizar_cabecalhos_estrutura("Produtos Correntes", data_str,quant, estruturas)
+	estruturas = preencher_qtds_itens_alternativos_phaseout(estruturas)
+
+	estruturas = estruturas.sort_values(by="insumo",ascending=True)
+	estruturas = estruturas[["insumo","alternativo_de","codigo_original","quant_utilizada","Exclusividade"]]
+
+	estruturas["Status"] = "CORRENTE"
+
+	# estruturas, coluna_insumo_estru = padronizar_cabecalhos_estrutura("Produtos Correntes", data_str,quant, estruturas)
 
 
-	# ESTOQUE
-	todos_os_codigos = forma_string_codigos(estruturas[coluna_insumo_estru].drop_duplicates())
+	# # ESTOQUE
+	# todos_os_codigos = forma_string_codigos(estruturas[coluna_insumo_estru].drop_duplicates())
 
-	query_estoque = get_query_estoque_atual()
-	estoque = pd.read_sql(text(query_estoque),engine, params={
-		"codigos": todos_os_codigos,
-	})
+	# query_estoque = get_query_estoque_atual()
+	# estoque = pd.read_sql(text(query_estoque),engine, params={
+	# 	"codigos": todos_os_codigos,
+	# })
 
-	# FORMA O ESTOQUE_PIVOT
-	estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
-	arm_exist = [col for col in estoque_pivot.columns if len(col) == 2]
-	estoque_pivot["Ttl Est"] = estoque_pivot[arm_exist].sum(axis=1)
+	# # FORMA O ESTOQUE_PIVOT
+	# estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
+	# arm_exist = [col for col in estoque_pivot.columns if len(col) == 2]
+	# estoque_pivot["Ttl Est"] = estoque_pivot[arm_exist].sum(axis=1)
 
-	estoque_pivot = padronizar_cabecalhos_estoque(estoque_pivot, data_str)
+	# estoque_pivot = padronizar_cabecalhos_estoque(estoque_pivot, data_str)
 
-	estruturas = estruturas.merge(
-		estoque_pivot,how="left",
-		left_on=coluna_insumo_estru,
-		right_on=f"Estoquexxx{data_str}xxxcodigo"
-	)
+	# estruturas = estruturas.merge(
+	# 	estoque_pivot,how="left",
+	# 	left_on=coluna_insumo_estru,
+	# 	right_on=f"Estoquexxx{data_str}xxxcodigo"
+	# )
 
-	# PEDIDOS
-	pedidos_pivot = get_pedidos_pivot(
-		engine=engine,
-		coluna_codigos=estruturas[coluna_insumo_estru],
-		abre_datas=False
-	)
-	pedidos_pivot = padronizar_cabecalhos_pedidos(pedidos_pivot)
+	# # PEDIDOS
+	# pedidos_pivot = get_pedidos_pivot(
+	# 	engine=engine,
+	# 	coluna_codigos=estruturas[coluna_insumo_estru],
+	# 	abre_datas=False
+	# )
+	# pedidos_pivot = padronizar_cabecalhos_pedidos(pedidos_pivot)
 
-	estruturas = estruturas.merge(
-		pedidos_pivot,how="left",
-		left_on=coluna_insumo_estru,
-		right_on=f"Pedidosxxxcodigoxxxquant_pedidos"
-	)
-	# PEDIDOS fim
+	# estruturas = estruturas.merge(
+	# 	pedidos_pivot,how="left",
+	# 	left_on=coluna_insumo_estru,
+	# 	right_on=f"Pedidosxxxcodigoxxxquant_pedidos"
+	# )
+	# # PEDIDOS fim
 
 	# SALVAR NO BD
 	request = salvar_dataframe_no_bd(
@@ -974,7 +981,8 @@ def carregar_estruturas_phase_out(request):
 
 	estruturas = estruturas.fillna("")
 
-	cabecalhos, rows = get_cabecalhos_e_rows_dataframe(estruturas)
+	# cabecalhos, rows = get_cabecalhos_e_rows_dataframe(estruturas)
+	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estruturas)
 
 	context = {
 		"caller":"carregar_estruturas",
@@ -1019,6 +1027,46 @@ def get_cabecalhos_e_rows_dataframe(
 
 
 
+def get_cabecalhos_e_rows_phaseout(
+		df:pd.DataFrame, reduz_campos:bool = True
+):
+
+	cabecalhos = []
+	cabecalhos_anteriores = []
+	size = len(df.columns[0].split("xxx"))
+	for i in range(size):
+		cabecalhos.append([])
+		cabecalhos_anteriores.append([])
+
+	for col in df.columns:
+		for i,subcol in enumerate(col.split("xxx")):
+			if subcol == cabecalhos_anteriores[i]:
+				cabecalhos[i][-1][subcol] = (cabecalhos[i][-1][subcol][0] + 1, col)
+			else:
+				cabecalhos[i].append({subcol:(1,col)})
+			cabecalhos_anteriores[i] = subcol
+
+	rows = []
+	insumo_anterior = ""
+	ult_indice = 0
+	for i, row in df.iterrows():
+		row_data = row.to_dict()
+		if row["insumo"] != insumo_anterior:
+			rows.append((row_data,1))
+			ult_indice = len(rows) - 1
+		else:
+			rows[ult_indice] = (rows[ult_indice][0],rows[ult_indice][1] + 1)
+			row_data.pop("insumo")
+			rows.append((row_data,1))
+		insumo_anterior = row["insumo"]
+		
+
+
+	return cabecalhos, rows
+
+
+
+
 def carregar_phase_out(request):
 
 	if request.method != "POST": return redirect(reverse("ghost:phase-out"))
@@ -1044,8 +1092,8 @@ def carregar_phase_out(request):
 	estruturas = pd.read_sql(f"SELECT * FROM [{codigo_aleatorio}]",sqlite_conn).drop(columns="index")
 	sqlite_conn.close()
 
-	estru_phase_out: pd.DataFrame
-	request, estru_phase_out, _ = gerar_multiestruturas(
+	phouts: pd.DataFrame
+	request, phouts, _ = gerar_multiestruturas(
 		request= request,
 		produtos=produtos_filtrados,
 		data_referencia=data_referencia,
@@ -1053,22 +1101,7 @@ def carregar_phase_out(request):
 		caller="phase_out"
 	)
 
-	# PHASE OUT PIVOT
-	ph_out_pivot = estru_phase_out.pivot(
-		index=["Exclusividade","insumo","alternativo_de","ordem_alt"],
-		columns="codigo_original",
-		values="quant_utilizada"
-	).reset_index()
-	estru_phase_out = None
 
-	# CABEÇALHOS PHASE OUT
-	novos_cabecalhos = {}
-	for col in ph_out_pivot.columns:
-		novos_cabecalhos.update({col:f"Phase Outxxx{data_str}xxx{col}"})
-	ph_out_pivot = ph_out_pivot.rename(columns=novos_cabecalhos)
-
-	novos_cabecalhos = None
-	col = None
 
 
 	estruturas = estruturas.fillna("")
@@ -1157,3 +1190,12 @@ def salvar_dataframe_no_bd(request,df,inicial_tabela,codigo_aleatorio=None):
 	df.to_sql(name=codigo_aleatorio, con=sqlite_conn, if_exists="replace", index=True)
 	sqlite_conn.close()
 	return request
+
+
+
+
+def preencher_qtds_itens_alternativos_phaseout(df:pd.DataFrame):
+	df["quant_utilizada"] = df["quant_utilizada"].fillna(
+		df.merge(df,how="left",left_on=["alternativo_de","codigo_original"],right_on=["insumo","codigo_original"],suffixes=("","_alt"))["quant_utilizada_alt"]
+	)
+	return df
