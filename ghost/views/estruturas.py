@@ -385,6 +385,9 @@ def estrutura_simples(codigo, data_referencia, engine = None,
 
 	if caller == "phase_out": return estrutura, pd.DataFrame()
 
+	if estrutura.empty:
+		return pd.DataFrame(), pd.DataFrame()
+
 	descricao = estrutura.loc[0,"descricao_cod_original"]
 
 
