@@ -1001,7 +1001,7 @@ def carregar_estruturas_phase_out(request):
 	estruturas = estruturas.sort_values(by="insumo",ascending=True)
 	estruturas = estruturas[["insumo","alternativo_de","codigo_original","quant_utilizada","Exclusividade"]]
 
-	estruturas["Status"] = "CORRENTE"
+	estruturas["Status"] = "Corrente"
 
 	# estruturas, coluna_insumo_estru = padronizar_cabecalhos_estrutura("Produtos Correntes", data_str,quant, estruturas)
 
@@ -1090,6 +1090,10 @@ def carregar_phase_out(request):
 	# PEGAR A TABELA SALVA NO BANCO
 	sqlite_conn = sqlite3.connect('db.sqlite3')
 	estruturas = pd.read_sql(f"SELECT * FROM [{codigo_aleatorio}]",sqlite_conn).drop(columns="index")
+	# if not estruturas.empty:
+	# 	cursor = sqlite_conn.cursor()
+	# 	cursor.execute(f"DROP TABLE [{codigo_aleatorio}]")
+	# 	sqlite_conn.commit()
 	sqlite_conn.close()
 
 	phouts: pd.DataFrame
@@ -1101,14 +1105,31 @@ def carregar_phase_out(request):
 		caller="phase_out"
 	)
 
-	
+	phouts = preencher_qtds_itens_alternativos_phaseout(phouts)
+
+	phouts = phouts[["insumo","alternativo_de","codigo_original","quant_utilizada","Exclusividade"]]
+
+	# EXCLUSIVIDADE PHASE OUTS
+	phouts_comuns = phouts.loc[phouts["insumo"].isin(estruturas["insumo"]),["insumo"]]
+	if not phouts_comuns.empty:
+		phouts.loc[phouts["insumo"].isin(phouts_comuns["insumo"]),"Exclusividade"] = "COMUM"
+		estruturas.loc[estruturas["insumo"].isin(phouts_comuns["insumo"]),"Exclusividade"] = "COMUM"
+	phouts_comuns = None
+
+	phouts.loc[
+		((~phouts["insumo"].isin(estruturas["insumo"])) & 
+		(phouts["Exclusividade"] == "COMUM")),"Exclusividade"
+	] = "COMUM ENTRE PHASE OUTS"
+
+	phouts["Status"] = "Phase Out"
+
+	estru_phouts = pd.concat([estruturas, phouts])
+	estru_phouts = estru_phouts.sort_values(by=["insumo","codigo_original"],ascending=[True,True])
 
 
+	estru_phouts = estru_phouts.fillna("")
 
-
-	estruturas = estruturas.fillna("")
-
-	cabecalhos, rows = get_cabecalhos_e_rows_dataframe(estruturas)
+	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estru_phouts)
 
 	context = {
 		"caller":"carregar_phase_out",

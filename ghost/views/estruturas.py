@@ -135,11 +135,6 @@ def explode_estrutura(
 
 	estrutura["quant_utilizada"] = estrutura.groupby("insumo")["quant_utilizada"].transform("sum")
 	estrutura.drop_duplicates(subset="insumo", inplace=True)
-	
-	if solicitante == "multiestruturas":
-		estrutura, todos_os_codigos = acrescenta_alternativos(estrutura, engine, abre_todos_os_PIs)
-	elif solicitante in ["simulador","phase_out"]:
-		estrutura, todos_os_codigos = acrescenta_alternativos_modelo_simulador(estrutura, engine)
 
 
 	if not abre_todos_os_PIs:
@@ -148,6 +143,12 @@ def explode_estrutura(
 	else:
 		estrutura = estrutura[estrutura["tipo_insumo"] != "PI"]
 		
+	
+	if solicitante == "multiestruturas":
+		estrutura, todos_os_codigos = acrescenta_alternativos(estrutura, engine, abre_todos_os_PIs)
+	elif solicitante in ["simulador","phase_out"]:
+		estrutura, todos_os_codigos = acrescenta_alternativos_modelo_simulador(estrutura, engine)
+
 
 	try:
 		descricao = estrutura.loc[estrutura["codigo_pai"] == codigo, "descricao_pai"].values[0]
@@ -159,7 +160,7 @@ def explode_estrutura(
 	estrutura["descricao_cod_original"] = str(descricao)
 	estrutura["tipo_original"] = str(tipo_original)
 
-	if solicitante in ["simulador","phase_out"]:
+	if solicitante in ["simulador"]:
 		estrutura = estrutura[[
 			"codigo_original",
 			"insumo", "alternativo_de", "ordem_alt", "quant_utilizada"
@@ -755,7 +756,7 @@ def gerar_multiestruturas(
 			)
 
 			#EXCLUSIVIDADE
-			if caller == "phase_out":
+			if caller == "phase_out" and not estrutura.empty:
 				if not compilado_estruturas.empty:
 					estrutura.loc[estrutura["insumo"].isin(compilado_estruturas["insumo"]),"Exclusividade"] = "COMUM"
 					estrutura.loc[~estrutura["insumo"].isin(compilado_estruturas["insumo"]),"Exclusividade"] = "EXCLUSIVO"
@@ -765,7 +766,8 @@ def gerar_multiestruturas(
 					estrutura["Exclusividade"] = "EXCLUSIVO"
 				
 
-			compilado_estruturas = pd.concat([compilado_estruturas, estrutura])
+			if not estrutura.empty:
+				compilado_estruturas = pd.concat([compilado_estruturas, estrutura])
 			if not custos_totais_produto.empty:
 				compilado_custos_totais = pd.concat([compilado_custos_totais, custos_totais_produto])
 		else:

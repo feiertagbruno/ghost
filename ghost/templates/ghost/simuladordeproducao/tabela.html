@@ -31,7 +31,7 @@
 			<tr>
 				{% for col, value in row.items %}
 					<td
-					{% if 'insumo' in col %}
+					{% if 'insumo' == col %}
 					rowspan="{{rowspan}}"
 					{% endif %}
 					>
