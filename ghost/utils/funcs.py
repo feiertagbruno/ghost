@@ -87,3 +87,9 @@ def tratamento_data_referencia(data_referencia):
 		else:
 			data_referencia = datetime.strptime(data_referencia, "%Y%m%d").date()
 	return data_referencia
+
+
+
+
+def rgb_para_long(rgb):
+    return (rgb[0] << 16) + (rgb[1] << 8) + rgb[2]

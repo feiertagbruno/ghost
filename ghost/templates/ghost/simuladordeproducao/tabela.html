@@ -31,7 +31,7 @@
 			<tr>
 				{% for col, value in row.items %}
 					<td
-					{% if 'insumo' == col %}
+					{% if col in colunas_para_mesclar %}
 					rowspan="{{rowspan}}"
 					{% endif %}
 					>

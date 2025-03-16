@@ -1,6 +1,7 @@
 from django.shortcuts import render,redirect
 from django.urls import reverse
 from django.contrib import messages
+from django.conf import settings
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 import pandas as pd
@@ -10,11 +11,14 @@ from datetime import datetime
 from io import StringIO
 from numpy import nan
 import json
+import xlwings as xw
+from os import path
+from openpyxl.utils import get_column_letter
 from ghost.queries import get_query_estoque_atual
 from ghost.views.estruturas import explode_estrutura, forma_string_codigos, gerar_multiestruturas
 from ghost.utils.funcs import (
 	get_engine, tratamento_data_referencia, gerar_codigo_aleatorio_simulador,
-	get_info_produtos
+	get_info_produtos, rgb_para_long
 )
 from ghost.views.consultas import get_produzidos_na_data,get_pedidos
 
@@ -930,7 +934,7 @@ def get_cabecalhos_e_rows_dataframe(
 
 
 def get_cabecalhos_e_rows_phaseout(
-		df:pd.DataFrame, reduz_campos:bool = True
+		df:pd.DataFrame, cols, reduz_campos:bool = True
 ):
 
 	cabecalhos = []
@@ -958,7 +962,8 @@ def get_cabecalhos_e_rows_phaseout(
 			ult_indice = len(rows) - 1
 		else:
 			rows[ult_indice] = (rows[ult_indice][0],rows[ult_indice][1] + 1)
-			row_data.pop("insumo")
+			for cc in cols:
+				row_data.pop(cc)
 			rows.append((row_data,1))
 		insumo_anterior = row["insumo"]
 		
@@ -996,51 +1001,18 @@ def carregar_estruturas_phase_out(request):
 		caller="phase_out"
 	)
 
-	estruturas = preencher_qtds_itens_alternativos_phaseout(estruturas)
+	estruturas = preencher_qtds_itens_alternativos_phaseout(estruturas, engine)
 
 	estruturas = estruturas.sort_values(by="insumo",ascending=True)
-	estruturas = estruturas[["insumo","alternativo_de","codigo_original","quant_utilizada","Exclusividade"]]
+	estruturas = estruturas[["insumo","descricao_insumo","alternativo_de",
+		"codigo_original","descricao_cod_original","quant_utilizada","Exclusividade"]]
 
 	estruturas["Status"] = "Corrente"
 
-	# estruturas, coluna_insumo_estru = padronizar_cabecalhos_estrutura("Produtos Correntes", data_str,quant, estruturas)
+	estruturas, colunas_estoque = preencher_estoques_phase_out(estruturas, engine)
 
+	estruturas = preencher_pedidos_phase_out(estruturas, engine)
 
-	# # ESTOQUE
-	# todos_os_codigos = forma_string_codigos(estruturas[coluna_insumo_estru].drop_duplicates())
-
-	# query_estoque = get_query_estoque_atual()
-	# estoque = pd.read_sql(text(query_estoque),engine, params={
-	# 	"codigos": todos_os_codigos,
-	# })
-
-	# # FORMA O ESTOQUE_PIVOT
-	# estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
-	# arm_exist = [col for col in estoque_pivot.columns if len(col) == 2]
-	# estoque_pivot["Ttl Est"] = estoque_pivot[arm_exist].sum(axis=1)
-
-	# estoque_pivot = padronizar_cabecalhos_estoque(estoque_pivot, data_str)
-
-	# estruturas = estruturas.merge(
-	# 	estoque_pivot,how="left",
-	# 	left_on=coluna_insumo_estru,
-	# 	right_on=f"Estoquexxx{data_str}xxxcodigo"
-	# )
-
-	# # PEDIDOS
-	# pedidos_pivot = get_pedidos_pivot(
-	# 	engine=engine,
-	# 	coluna_codigos=estruturas[coluna_insumo_estru],
-	# 	abre_datas=False
-	# )
-	# pedidos_pivot = padronizar_cabecalhos_pedidos(pedidos_pivot)
-
-	# estruturas = estruturas.merge(
-	# 	pedidos_pivot,how="left",
-	# 	left_on=coluna_insumo_estru,
-	# 	right_on=f"Pedidosxxxcodigoxxxquant_pedidos"
-	# )
-	# # PEDIDOS fim
 
 	# SALVAR NO BD
 	request = salvar_dataframe_no_bd(
@@ -1054,15 +1026,23 @@ def carregar_estruturas_phase_out(request):
 	estruturas = estruturas.fillna("")
 
 	# cabecalhos, rows = get_cabecalhos_e_rows_dataframe(estruturas)
-	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estruturas)
+	colunas_para_mesclar = get_colunas_para_mesclar(colunas_estoque)
+	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estruturas, colunas_para_mesclar)
 
 	context = {
 		"caller":"carregar_estruturas",
 		"cabecalhos":cabecalhos,
-		"rows":rows
+		"rows":rows,
+		"colunas_para_mesclar":colunas_para_mesclar,
 	}
 
 	return render(request, "ghost/simuladordeproducao/phase_out.html", context)
+
+
+
+
+def get_colunas_para_mesclar(colunas_estoque):
+	return ["insumo","descricao_insumo","Exclusividade",*colunas_estoque, "Pedidos"]
 
 
 
@@ -1105,9 +1085,10 @@ def carregar_phase_out(request):
 		caller="phase_out"
 	)
 
-	phouts = preencher_qtds_itens_alternativos_phaseout(phouts)
+	phouts = preencher_qtds_itens_alternativos_phaseout(phouts, engine)
 
-	phouts = phouts[["insumo","alternativo_de","codigo_original","quant_utilizada","Exclusividade"]]
+	phouts = phouts[["insumo","descricao_insumo","alternativo_de",
+		"codigo_original","descricao_cod_original","quant_utilizada","Exclusividade"]]
 
 	# EXCLUSIVIDADE PHASE OUTS
 	phouts_comuns = phouts.loc[phouts["insumo"].isin(estruturas["insumo"]),["insumo"]]
@@ -1123,18 +1104,31 @@ def carregar_phase_out(request):
 
 	phouts["Status"] = "Phase Out"
 
+	phouts, colunas_estoque = preencher_estoques_phase_out(phouts,engine)
+
+	phouts = preencher_pedidos_phase_out(phouts, engine)
+
 	estru_phouts = pd.concat([estruturas, phouts])
 	estru_phouts = estru_phouts.sort_values(by=["insumo","codigo_original"],ascending=[True,True])
 
+	request = salvar_dataframe_no_bd(
+		request=request,
+		df=estru_phouts,
+		codigo_aleatorio=codigo_aleatorio
+	)
 
 	estru_phouts = estru_phouts.fillna("")
 
-	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estru_phouts)
+	colunas_para_mesclar = get_colunas_para_mesclar(colunas_estoque)
+	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estru_phouts, colunas_para_mesclar)
+
+	gerar_simulacao_excel(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar, colunas_estoque)
 
 	context = {
 		"caller":"carregar_phase_out",
 		"cabecalhos":cabecalhos,
-		"rows":rows
+		"rows":rows,
+		"colunas_para_mesclar":colunas_para_mesclar,
 	}
 
 	return render(request, "ghost/simuladordeproducao/phase_out.html", context)
@@ -1204,7 +1198,7 @@ def get_pedidos_pivot(engine,coluna_codigos,abre_datas = True):
 
 
 
-def salvar_dataframe_no_bd(request,df,inicial_tabela,codigo_aleatorio=None):
+def salvar_dataframe_no_bd(request,df,inicial_tabela = "",codigo_aleatorio=None):
 	if not codigo_aleatorio:
 		codigo_aleatorio = gerar_codigo_aleatorio_simulador(10,inicial_tabela)
 		request.session["codigo-aleatorio"] = codigo_aleatorio
@@ -1217,8 +1211,139 @@ def salvar_dataframe_no_bd(request,df,inicial_tabela,codigo_aleatorio=None):
 
 
 
-def preencher_qtds_itens_alternativos_phaseout(df:pd.DataFrame):
+def preencher_qtds_itens_alternativos_phaseout(df:pd.DataFrame, engine):
 	df["quant_utilizada"] = df["quant_utilizada"].fillna(
-		df.merge(df,how="left",left_on=["alternativo_de","codigo_original"],right_on=["insumo","codigo_original"],suffixes=("","_alt"))["quant_utilizada_alt"]
+		df.merge(df,how="left",
+		   left_on=["alternativo_de","codigo_original"],
+		   right_on=["insumo","codigo_original"],
+		   suffixes=("","_alt")
+		)["quant_utilizada_alt"]
 	)
+
+	codigos_sem_descricao = df.loc[df["descricao_insumo"].isna(),"insumo"].drop_duplicates()
+	codigos_str = forma_string_codigos(codigos_sem_descricao)
+
+	info_produtos = get_info_produtos(codigos=codigos_str, engine=engine)
+
+	df["descricao_insumo"] = df["descricao_insumo"].fillna(
+		df.merge(
+			info_produtos,how="left",
+			left_on="insumo",
+			right_on="codigo"
+		)["descricao_produto"]
+	)
+
 	return df
+
+
+
+
+def preencher_estoques_phase_out(df:pd.DataFrame, engine):
+		# ESTOQUE
+	todos_os_codigos = forma_string_codigos(df["insumo"].drop_duplicates())
+
+	query_estoque = get_query_estoque_atual()
+	estoque = pd.read_sql(text(query_estoque),engine, params={
+		"codigos": todos_os_codigos,
+	})
+
+	# FORMA O ESTOQUE_PIVOT
+	estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
+	arm_exist = ["11","14","20"]
+	estoque_pivot["Ttl Est (11, 14, 20)"] = estoque_pivot[arm_exist].sum(axis=1)
+
+	df = df.merge(
+		estoque_pivot,how="left",
+		left_on="insumo",
+		right_on="codigo"
+	).drop(columns=["codigo","tipo","descricao"])
+
+	colunas = list(estoque_pivot.drop(columns=["codigo","tipo","descricao"]).columns)
+
+	return df, colunas
+
+
+
+
+def preencher_pedidos_phase_out(df:pd.DataFrame, engine):
+	# PEDIDOS
+	pedidos_pivot = get_pedidos_pivot(
+		engine=engine,
+		coluna_codigos=df["insumo"],
+		abre_datas=False
+	)
+
+	df = df.merge(
+		pedidos_pivot,how="left",
+		left_on="insumo",
+		right_on="codigo"
+	).drop(columns=["codigo"]).rename(columns={"quant":"Pedidos"})
+
+	return df
+
+
+
+
+def gerar_simulacao_excel(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar, colunas_estoque):
+	app = xw.App(visible=False)
+	wb = app.books.add()
+
+	try:
+
+		ws = wb.sheets[0]
+
+		prim_lin = 2
+		prim_col = 2
+
+		ws.range((1,prim_col)).value = "Simulação Phase Out"
+		ws.cells(1,prim_col).api.Font.Bold = True
+
+		lin = prim_lin
+		full_cabs = []
+		for nivel_cab in cabecalhos:
+			col = prim_col
+			for cabecalho in nivel_cab:
+				for cab, info_cab in cabecalho.items():
+					colspan, full_cab = info_cab
+					celula = ws.cells(lin,col)
+					celula.value = cab
+					celula.api.Font.Bold = True
+					celula.color = (50,50,50)
+					celula.api.Font.Color = rgb_para_long((255,255,255))
+					# celula.api.Borders.LineStyle = 1
+					if colspan > 1:
+						ws.range((lin,col),(lin,col+colspan-1)).merge()
+						col = col+colspan-1
+					if lin == 2:
+						full_cabs.append(full_cab)
+					col += 1
+			lin += 1
+
+		for row, rowspan in rows:
+			col = prim_col
+			for cab in full_cabs:
+				if row.get(cab):
+					ws.cells(lin,col).value = row[cab]
+					# ws.cells(lin,col).api.Borders.LineStyle = 1
+				if cab in colunas_para_mesclar and rowspan > 1:
+					ws.range((lin,col),(lin+rowspan-1,col)).merge()
+					ws.cells(lin,col).api.VerticalAlignment = -4108
+				col += 1
+			lin += 1
+
+		ws.range(f"{get_column_letter(prim_col)}:{get_column_letter(col-1)}").autofit()
+		ws.range((prim_lin,prim_col),(lin-1,col-1)).api.Borders.LineStyle = 1
+
+		# range_tabela = ws.range((prim_lin,prim_col),(lin-1,col-1))
+		# tabela = ws.api.ListObjects.Add(1,range_tabela.api, "", 1)
+		# tabela.Name = "simulador"
+
+
+
+		caminho = path.join(settings.MEDIA_ROOT,f"{codigo_aleatorio}.xlsx")
+		wb.save(caminho)
+	except Exception as e: 
+		print(e)
+	finally:
+		wb.close()
+		app.quit()
