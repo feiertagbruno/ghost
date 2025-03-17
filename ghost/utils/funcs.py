@@ -93,3 +93,9 @@ def tratamento_data_referencia(data_referencia):
 
 def rgb_para_long(rgb):
     return (rgb[0] << 16) + (rgb[1] << 8) + rgb[2]
+
+
+
+
+def rgb_para_hex(r, g, b):
+    return "{:02x}{:02x}{:02x}".format(r, g, b)

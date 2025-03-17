@@ -13,12 +13,17 @@ from numpy import nan
 import json
 import xlwings as xw
 from os import path
+
+from openpyxl import Workbook
+from openpyxl.comments import Comment
+from openpyxl.styles import PatternFill, Font,Color, Border,Side
 from openpyxl.utils import get_column_letter
+
 from ghost.queries import get_query_estoque_atual
 from ghost.views.estruturas import explode_estrutura, forma_string_codigos, gerar_multiestruturas
 from ghost.utils.funcs import (
 	get_engine, tratamento_data_referencia, gerar_codigo_aleatorio_simulador,
-	get_info_produtos, rgb_para_long
+	get_info_produtos, rgb_para_long, rgb_para_hex
 )
 from ghost.views.consultas import get_produzidos_na_data,get_pedidos
 
@@ -1064,8 +1069,6 @@ def carregar_phase_out(request):
 	produtos_filtrados = [item for item in produtos if item != ""]
 
 	data_referencia = datetime.today().date()
-	data_str = data_referencia.strftime("%d-%m-%Y")
-	quant = 1
 
 	# PEGAR A TABELA SALVA NO BANCO
 	sqlite_conn = sqlite3.connect('db.sqlite3')
@@ -1122,7 +1125,9 @@ def carregar_phase_out(request):
 	colunas_para_mesclar = get_colunas_para_mesclar(colunas_estoque)
 	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estru_phouts, colunas_para_mesclar)
 
-	gerar_simulacao_excel(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar, colunas_estoque)
+	# gerar_simulacao_excel(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar, colunas_estoque)
+	# relatorio_phaseout_com_openpyxl(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar)
+	relatorio_phaseout_por_produto(codigo_aleatorio,colunas_para_mesclar)
 
 	context = {
 		"caller":"carregar_phase_out",
@@ -1250,7 +1255,8 @@ def preencher_estoques_phase_out(df:pd.DataFrame, engine):
 	# FORMA O ESTOQUE_PIVOT
 	estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
 	arm_exist = ["11","14","20"]
-	estoque_pivot["Ttl Est (11, 14, 20)"] = estoque_pivot[arm_exist].sum(axis=1)
+	arm_verificados = [arm for arm in arm_exist if arm in estoque_pivot.columns]
+	estoque_pivot["Ttl Est (11, 14, 20)"] = estoque_pivot[arm_verificados].sum(axis=1)
 
 	df = df.merge(
 		estoque_pivot,how="left",
@@ -1314,7 +1320,7 @@ def gerar_simulacao_excel(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar,
 					if colspan > 1:
 						ws.range((lin,col),(lin,col+colspan-1)).merge()
 						col = col+colspan-1
-					if lin == 2:
+					if lin == prim_lin:
 						full_cabs.append(full_cab)
 					col += 1
 			lin += 1
@@ -1347,3 +1353,161 @@ def gerar_simulacao_excel(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar,
 	finally:
 		wb.close()
 		app.quit()
+
+
+
+
+def relatorio_phaseout_com_openpyxl(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar):
+	wb = Workbook()
+	ws = wb.active
+	ws.title = "Simulador"
+
+	print("openpyxl")
+
+	prim_lin = 2
+	prim_col = 2
+
+	lin = prim_lin
+	full_cabs = []
+	for nivel_cab in cabecalhos:
+		col = prim_col
+		for cabecalho in nivel_cab:
+			for cab, info_cab in cabecalho.items():
+				colspan, full_cab = info_cab
+				celula = ws.cell(lin,col,cab)
+				if colspan > 1:
+					celula.comment = Comment(f"lin:{colspan}","")
+				if lin == prim_lin:
+					full_cabs.append(full_cab)
+				col += 1
+		lin += 1
+
+	for row, rowspan in rows:
+		col = prim_col
+		for cab in full_cabs:
+			if row.get(cab):
+				celula = ws.cell(lin, col, row[cab])
+			if cab in colunas_para_mesclar and rowspan > 1:
+				celula.comment = Comment(f"col:{rowspan}","")
+			col += 1
+		lin += 1
+	
+	print("xlwings")
+
+	caminho = path.join(settings.MEDIA_ROOT,f"{codigo_aleatorio}_.xlsx")
+	wb.save(caminho)
+
+	app = xw.App(visible=False,add_book=False)
+	xwwb = app.books.open(caminho)
+	xwws = xwwb.sheets("Simulador")
+
+	for l in range(prim_lin,lin,1):
+		for c in range(prim_col,col,1):
+			if xwws.cells(l,c).api.Comment:
+				direcao, comm = xwws.cells(l,c).api.Comment.Text().split(":")
+				comm = int(comm)
+				if direcao == "lin":
+					xwws.range((l,c),(l,c+comm-1)).merge()
+				elif direcao == "col":
+					xwws.range((l,c),(l+comm-1,c)).merge()
+				xwws.cells(l,c).api.VerticalAlignment = -4108
+				xwws.cells(l,c).api.Comment.Delete()
+	
+	xwwb.save()
+	xwwb.close()
+	app.quit()
+
+
+
+
+def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar):
+
+	df:pd.DataFrame
+	sqlite_conn = sqlite3.connect("db.sqlite3")
+	df = pd.read_sql(f"SELECT * FROM [{codigo_aleatorio}]",sqlite_conn).drop(columns="index")
+	sqlite_conn.close()
+
+	wb = Workbook()
+	ws = wb.active
+	ws.title = "Simulador"
+
+	produtos = df.loc[:,"insumo"].drop_duplicates()
+	prim_lin = 2
+	prim_col = 2
+	cinza_claro = Color(rgb_para_hex(214,214,214))
+	cinza_escuro = Color(rgb_para_hex(50,50,50))
+	branco = Color(rgb_para_hex(255,255,255))
+	borda_fina_style = Side(style="thin")
+	borda_fina = Border(
+		left=borda_fina_style,
+		right=borda_fina_style,
+		top=borda_fina_style,
+		bottom=borda_fina_style
+	)
+	borda_grossa_inferior = Border(
+		left=borda_fina_style,
+		right=borda_fina_style,
+		top=borda_fina_style,
+		bottom=Side(style="thick")
+	)
+
+	lin = prim_lin
+	col = prim_col
+	cab_col = {}
+	mesclagem = []
+
+	for cabecalho in df.columns:
+		celula = ws.cell(lin,col,cabecalho)
+		celula.fill = PatternFill(start_color=cinza_escuro,patternType="solid")
+		celula.font = Font(color=branco,b=True)
+		cab_col.update({cabecalho:col})
+		col += 1
+	lin += 1
+
+	df_prod: pd.DataFrame
+	cor_da_vez = cinza_claro
+	for produto in produtos:
+		df_prod  = df.loc[df["insumo"] == produto,:]
+
+		if cor_da_vez == cinza_claro:
+			cor_da_vez = branco
+		else:
+			cor_da_vez = cinza_claro
+		
+		linini = lin
+		for _, row in df_prod.iterrows():
+			col = prim_col
+			for cab in df.columns:
+				celula = ws.cell(lin,col,row[cab])
+				celula.fill = PatternFill(start_color=cor_da_vez)
+				celula.border = borda_fina
+				col += 1
+			lin += 1
+		
+		#mesclagem
+		if df_prod.shape[0] > 1:
+			for col_mescla in colunas_para_mesclar:
+				letra_col_mescla = get_column_letter(cab_col[col_mescla])
+				mesclagem.append(f"{letra_col_mescla}{linini}:{letra_col_mescla}{lin-1}")
+
+		for celula in ws[f"{get_column_letter(prim_col)}{lin-1}:{get_column_letter(col-1)}{lin-1}"][0]:
+			celula.border = borda_grossa_inferior
+	
+	caminho = path.join(settings.MEDIA_ROOT,f"{codigo_aleatorio}.xlsx")
+	wb.save(caminho)
+
+	print("xlwings")
+
+	app = xw.App(visible=True,add_book=False)
+	xwwb = app.books.open(caminho)
+	xwws = xwwb.sheets("Simulador")
+
+	for mescla in mesclagem:
+		xwws.range(mescla).merge()
+		xwws.range(mescla).api.VerticalAlignment = -4108
+	
+	xwws.range(f"{get_column_letter(prim_col)}:{get_column_letter(col - 1)}").autofit()
+	
+	xwwb.save()
+	xwwb.close()
+	app.quit()

@@ -90,6 +90,10 @@ th{
 	background-color: #f2f2f2;
 }
 
+td {
+	font-size: 1.3rem;
+}
+
 ul {
 	font-size: 1.5rem;
 	list-style-type: none;
