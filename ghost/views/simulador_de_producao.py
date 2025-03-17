@@ -17,7 +17,7 @@ from os import path
 from openpyxl import Workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill, Font,Color, Border,Side
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter as gcl
 
 from ghost.queries import get_query_estoque_atual
 from ghost.views.estruturas import explode_estrutura, forma_string_codigos, gerar_multiestruturas
@@ -1337,7 +1337,7 @@ def gerar_simulacao_excel(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar,
 				col += 1
 			lin += 1
 
-		ws.range(f"{get_column_letter(prim_col)}:{get_column_letter(col-1)}").autofit()
+		ws.range(f"{gcl(prim_col)}:{gcl(col-1)}").autofit()
 		ws.range((prim_lin,prim_col),(lin-1,col-1)).api.Borders.LineStyle = 1
 
 		# range_tabela = ws.range((prim_lin,prim_col),(lin-1,col-1))
@@ -1420,7 +1420,7 @@ def relatorio_phaseout_com_openpyxl(codigo_aleatorio,cabecalhos,rows,colunas_par
 
 
 
-def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar):
+def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_meses = 6):
 
 	df:pd.DataFrame
 	sqlite_conn = sqlite3.connect("db.sqlite3")
@@ -1482,15 +1482,21 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar):
 				celula.fill = PatternFill(start_color=cor_da_vez)
 				celula.border = borda_fina
 				col += 1
+			
+			if lin == linini:
+				celula = ws.cell(lin,col,f"={gcl(col-1)}{lin}")
+
 			lin += 1
+		
+		
 		
 		#mesclagem
 		if df_prod.shape[0] > 1:
 			for col_mescla in colunas_para_mesclar:
-				letra_col_mescla = get_column_letter(cab_col[col_mescla])
+				letra_col_mescla = gcl(cab_col[col_mescla])
 				mesclagem.append(f"{letra_col_mescla}{linini}:{letra_col_mescla}{lin-1}")
 
-		for celula in ws[f"{get_column_letter(prim_col)}{lin-1}:{get_column_letter(col-1)}{lin-1}"][0]:
+		for celula in ws[f"{gcl(prim_col)}{lin-1}:{gcl(col-1)}{lin-1}"][0]:
 			celula.border = borda_grossa_inferior
 	
 	caminho = path.join(settings.MEDIA_ROOT,f"{codigo_aleatorio}.xlsx")
@@ -1506,7 +1512,7 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar):
 		xwws.range(mescla).merge()
 		xwws.range(mescla).api.VerticalAlignment = -4108
 	
-	xwws.range(f"{get_column_letter(prim_col)}:{get_column_letter(col - 1)}").autofit()
+	xwws.range(f"{gcl(prim_col)}:{gcl(col - 1)}").autofit()
 	
 	xwwb.save()
 	xwwb.close()
