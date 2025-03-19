@@ -4,10 +4,12 @@ from django.contrib import messages
 from django.conf import settings
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+
 import pandas as pd
 import sqlite3
 from sqlalchemy import text
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from io import StringIO
 from numpy import nan
 import json
@@ -1450,6 +1452,8 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_m
 		top=borda_fina_style,
 		bottom=Side(style="thick")
 	)
+	fundo_escuro = PatternFill(start_color=cinza_escuro,patternType="solid")
+	fonte_branca = Font(color=branco,b=True)
 
 	lin = prim_lin
 	col = prim_col
@@ -1458,10 +1462,38 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_m
 
 	for cabecalho in df.columns:
 		celula = ws.cell(lin,col,cabecalho)
-		celula.fill = PatternFill(start_color=cinza_escuro,patternType="solid")
-		celula.font = Font(color=branco,b=True)
+		celula.fill = fundo_escuro
+		celula.font = fonte_branca
 		cab_col.update({cabecalho:col})
 		col += 1
+
+		# CABEÇALHOS DOS MESES
+		mes_atual = datetime.now()
+		for m in range(qtd_meses):
+
+			mes_atual = mes_atual + relativedelta(months=m)
+
+			celula = ws.cell(lin-1,col,mes_atual.strftime("%B/%y"))
+			celula.fill = fundo_escuro
+			celula.font = fonte_branca
+			mesclagem.append(f"{gcl(col)}{lin-1}:{gcl(col+2)}{lin-1}")
+
+			celula = ws.cell(lin,col,"Saldo Inicial")
+			celula.fill = fundo_escuro
+			celula.font = fonte_branca
+			col += 1
+
+			celula = ws.cell(lin, col, "Necessidade")
+			celula.fill = fundo_escuro
+			celula.font = fonte_branca
+			col += 1
+
+			celula = ws.cell(lin, col, "Saldo Final")
+			celula.fill = fundo_escuro
+			celula.font = fonte_branca
+			col += 1
+
+
 	lin += 1
 
 	df_prod: pd.DataFrame
@@ -1485,6 +1517,7 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_m
 			
 			if lin == linini:
 				celula = ws.cell(lin,col,f"={gcl(col-1)}{lin}")
+				# parte das fórmuas de quantidade
 
 			lin += 1
 		
