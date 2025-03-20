@@ -450,7 +450,8 @@ SELECT
 	B1_TIPO tipo,
 	TRIM(B1_XORIMRP) origem,
 	B2_LOCAL armazem,
-	ISNULL(B2_QATU,0) quant
+	ISNULL(B2_QATU,0) quant,
+	B2_CM1 unitario
 FROM VW_MN_SB2 B2
 LEFT JOIN VW_MN_SB1 B1
 	ON B1.D_E_L_E_T_ <> '*'
