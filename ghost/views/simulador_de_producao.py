@@ -1254,11 +1254,17 @@ def preencher_estoques_phase_out(df:pd.DataFrame, engine):
 		"codigos": todos_os_codigos,
 	})
 
+	# CALCULA O CUSTO MÉDIO PONDERADO
+	estoque["total"] = estoque["quant"] * estoque["unitario"]
+	custo_medio = estoque.groupby(by="codigo").apply(lambda x: round( x["total"].sum() / x["quant"].sum() ,5)).reset_index(name='custo_medio')
+
 	# FORMA O ESTOQUE_PIVOT
 	estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
 	arm_exist = ["11","14","20"]
 	arm_verificados = [arm for arm in arm_exist if arm in estoque_pivot.columns]
 	estoque_pivot["Ttl Est (11, 14, 20)"] = estoque_pivot[arm_verificados].sum(axis=1)
+
+	estoque_pivot = estoque_pivot.merge(custo_medio, on="codigo")
 
 	df = df.merge(
 		estoque_pivot,how="left",
