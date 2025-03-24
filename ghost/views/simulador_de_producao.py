@@ -32,6 +32,7 @@ from ghost.utils.funcs import (
 	get_info_produtos, rgb_para_long, rgb_para_hex
 )
 from ghost.views.consultas import get_produzidos_na_data,get_pedidos
+from ghost.models import Processamento
 
 def simulador_de_producao(request):
 	if request.session.get("codigo-aleatorio"):
@@ -993,6 +994,16 @@ def carregar_estruturas_phase_out(request):
 
 	if not produtos: return redirect(reverse("ghost:phase-out"))
 
+	################ processamento
+	processamento = Processamento.objects.get_or_create(
+		codigo_identificador = request.POST.get("codigo-identificador","a"),
+		caller = "phase_out",
+		porcentagem = "",
+		mensagem1 = "Processando",
+		mensagem2 = ""
+	)[0]
+	################
+
 	engine = get_engine()
 	codigo_aleatorio = request.session.get("codigo-aleatorio")
 
@@ -1464,6 +1475,16 @@ def relatorio_phaseout_com_openpyxl(codigo_aleatorio,cabecalhos,rows,colunas_par
 def relatorio_phaseout_por_produto(request):
 
 	data = request.data
+
+	################ processamento
+	processamento = Processamento.objects.get_or_create(
+		codigo_identificador = request.POST.get("codigo-identificador","a"),
+		caller = "phase_out",
+		porcentagem = "",
+		mensagem1 = "Processando",
+		mensagem2 = ""
+	)[0]
+	################
 
 	codigo_aleatorio = data.get("codigo_aleatorio")
 

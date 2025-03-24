@@ -1,11 +1,12 @@
 // @ts-check
-const botao_relatorio = document.querySelector(".botao-relatorio-phase-out")
-const csrf = document.getElementById("")
+const botao_relatorio = document.getElementById("botao-relatorio-phase-out-id")
 const data_code = botao_relatorio?.getAttribute("data-code")
+
 
 if (botao_relatorio) {
   // @ts-ignore
-  botao_relatorio.onclick = e => {
+  botao_relatorio.onclick = () => {
+    mostra_tela_aguarde(csrf, codigo_processamento, "phase_out")
     baixar_relatrio_phase_out()
   }
 }
@@ -15,7 +16,7 @@ async function baixar_relatrio_phase_out() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-CSRFToken": getCSRFToken()
+      "X-CSRFToken": csrf
     },
     body: JSON.stringify({
       codigo_aleatorio: data_code

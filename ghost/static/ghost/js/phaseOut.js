@@ -1,6 +1,9 @@
 // @ts-check
 
 const explode_pis = document.getElementById("explode-pis-id")
+const botao_carregar = document.getElementById("botao-multi-simples")
+const codigo_processamento = gerarCodigoAleatorio(10, document.getElementsByName("codigo-identificador"))
+const csrf = getCSRFToken()
 
 if (explode_pis) {
   explode_pis.onchange = el => {
@@ -24,3 +27,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 })
+
+if (botao_carregar) {
+  botao_carregar.onclick = () => {
+    mostra_tela_aguarde(csrf, codigo_processamento, "phase_out")
+  }
+}

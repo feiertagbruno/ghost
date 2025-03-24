@@ -733,13 +733,13 @@ def gerar_multiestruturas(
 	data_referencia = tratamento_data_referencia(data_referencia)
 
 	################ processamento
-	processamento = Processamento.objects.create(
+	processamento = Processamento.objects.get_or_create(
 		codigo_identificador = request.POST.get("codigo-identificador","a"),
-		caller = "multiestruturas",
+		caller = caller,
 		porcentagem = "",
 		mensagem1 = "Processando",
 		mensagem2 = ""
-	)
+	)[0]
 	################
 
 	for index, produto in enumerate(produtos):

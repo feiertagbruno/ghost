@@ -38,7 +38,15 @@ function gerarCodigoAleatorio(tamanho, elemento) {
       const indice = Math.floor(Math.random() * caracteres.length);
       codigo += caracteres[indice];
   }
-	elemento.value = codigo
+	if (elemento) {
+		if (elemento instanceof NodeList) {
+			elemento.forEach(el => {
+				el.value = codigo
+			})
+		} else {
+			elemento.value = codigo
+		}
+	}
   return codigo;
 }
 
