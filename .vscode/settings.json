@@ -5,6 +5,7 @@
 	"python.testing.pytestEnabled": true,
 	"python.testing.pytestArgs": [], // -x to bail
 	"python.defaultInterpreterPath": "venv/scripts",
+	"javascript.suggestionActions.enabled": true,
 	"editor.tabSize": 2,
 	"[python]": {
 		"editor.tabSize": 4,

@@ -12,3 +12,10 @@ function getTodayDate() {
 	const today = new Date();
 	return today.toISOString().split("T")[0];
 }
+
+function getCSRFToken() {
+	const cookieValue = document.cookie
+			.split('; ')
+			.find(row => row.startsWith('csrftoken='));
+	return cookieValue ? cookieValue.split('=')[1] : '';
+}

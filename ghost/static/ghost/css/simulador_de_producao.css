@@ -77,6 +77,7 @@
 .titulo-simulador-de-producao {
 	width: 90vw;
 	margin: 0 auto;
+	position: relative;
 }
 
 .primeira-linha-simulador {
@@ -127,4 +128,10 @@
 .botao-carregar-phase-out {
 	align-self: start;
 	margin-left: 2rem;
+}
+
+.botao-relatorio-phase-out {
+	position: absolute;
+	right: 0;
+	bottom: .3rem;
 }

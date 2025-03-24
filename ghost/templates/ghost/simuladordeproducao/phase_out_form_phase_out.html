@@ -14,16 +14,16 @@ action="{% url "ghost:carregar-phase-out" %}"
   <textarea class="codigos-produtos-phase-out" name="codigos-produtos" id="codigos-produtos-id"></textarea>
 </div>
 
-<div class="flex-flow-column">
-  <div class="no-wrap">
+{% comment %} <div class="flex-flow-column"> {% endcomment %}
+  <div class="no-wrap" style="padding-top: 0.5rem;">
     <label for="explode-pis-id">Explode PIs:</label>
     <input type="checkbox" name="explodir-pis" id="explode-pis-id" checked>
   </div>
-  <div class="no-wrap">
+  {% comment %} <div class="no-wrap">
     <label for="abre-detalhamento-id">Abre detalhamento:</label>
     <input type="checkbox" name="abre-detalhamento" id="abre-detalhamento-id" checked>
-  </div>
-</div>
+  </div> {% endcomment %}
+{% comment %} </div> {% endcomment %}
 
 <button id="botao-multi-simples" class="botao-padrao botao-carregar-phase-out" type="submit">Carregar</button>
 

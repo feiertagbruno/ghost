@@ -1,7 +1,7 @@
 const codigo_aleatorio = document.getElementById("codigo-aleatorio-id").value
 const form_tabela_simulador = document.getElementById("form-tabela-simulador-id")
 const btn_salvar_simulacao = document.getElementById("salvar-simulacao-id")
-const nome_da_simulacao = form_tabela_simulador.querySelector("#nome-da-simulacao-id")
+const nome_da_simulacao = document.querySelector("#nome-da-simulacao-id")
 
 
 document.ondblclick = (el) => {
@@ -58,27 +58,29 @@ async function salva_valor_no_bd(codigo_aleatorio, unique, novo_valor, el, input
 	}
 }
 
-btn_salvar_simulacao.onclick = e => {
-	e.preventDefault()
-	if (nome_da_simulacao.value) {
-		const mensagem_tabela_simulador = document.querySelector(".mensagem-tabela-simulador")
-		if ('0123456789'.includes(nome_da_simulacao.value.slice(0,1))) {
-			add_msg_mensagem_tabela_simulador(
-				mensagem_tabela_simulador, 
-				"O primeiro dígito do nome não pode ser um número", 
-				"color-vermelho"
-			)
-			return
+if (btn_salvar_simulacao){
+	btn_salvar_simulacao.onclick = e => {
+		e.preventDefault()
+		if (nome_da_simulacao.value) {
+			const mensagem_tabela_simulador = document.querySelector(".mensagem-tabela-simulador")
+			if ('0123456789'.includes(nome_da_simulacao.value.slice(0,1))) {
+				add_msg_mensagem_tabela_simulador(
+					mensagem_tabela_simulador, 
+					"O primeiro dígito do nome não pode ser um número", 
+					"color-vermelho"
+				)
+				return
+			}
+			mensagem_tabela_simulador.classList.add("hidden")
+			
+			
+			salvar_simulacao(codigo_aleatorio, nome_da_simulacao, mensagem_tabela_simulador)
+	
+		} else {
+			nome_da_simulacao.classList.add("background-vermelho-claro")
+			nome_da_simulacao.classList.add("transition-500")
+			setTimeout(() => nome_da_simulacao.classList.remove("background-vermelho-claro"),500)
 		}
-		mensagem_tabela_simulador.classList.add("hidden")
-		
-		
-		salvar_simulacao(codigo_aleatorio, nome_da_simulacao, mensagem_tabela_simulador)
-
-	} else {
-		nome_da_simulacao.classList.add("background-vermelho-claro")
-		nome_da_simulacao.classList.add("transition-500")
-		setTimeout(() => nome_da_simulacao.classList.remove("background-vermelho-claro"),500)
 	}
 }
 
@@ -136,7 +138,7 @@ function add_msg_mensagem_tabela_simulador(mensagem_tabela_simulador, mensagem, 
 }
 
 document.addEventListener("DOMContentLoaded", ()=> {
-	if (nome_da_simulacao.value) {
+	if (nome_da_simulacao) {
 		nome_da_simulacao.setAttribute("readOnly", true)
 		nome_da_simulacao.classList.add("background-amarelo")
 	}

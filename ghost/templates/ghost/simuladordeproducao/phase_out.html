@@ -7,7 +7,12 @@
 
 {% block content %}
 
-<div class="titulo-form borda-dupla-inferior titulo-simulador-de-producao">Phase Out</div>
+<div class="titulo-form borda-dupla-inferior titulo-simulador-de-producao">
+	Phase Out
+	{% if caller != "inicial" %}
+	<button class="botao-pequeno botao-relatorio-phase-out" data-code="{{codigo_aleatorio}}">Baixar Relatório em Excel</button>
+	{% endif %}
+</div>
 	{% if caller == "inicial" %}
 		{% include "ghost/simuladordeproducao/phase_out_form_inicial.html" %}
 	{% endif %}
@@ -17,13 +22,21 @@
 {% if caller != 'inicial' %}
 <div class="box-tabela-simulador" id="box-tabela-simulador-id">
 	{% include "ghost/simuladordeproducao/tabela.html" %}
+	{% if campos_alteraveis %}
 	<input type="hidden" name="campos-alteraveis" id="campos-alteraveis-id" value="{{campos_alteraveis}}">
+	{% endif %}
 </div>
 {% endif %}
+
   
 <input type="hidden" name="caller" id="caller-id" value="{{caller}}">
 
 <script src="{% static "ghost/js/phaseOut.js" %}"></script>
+{% if caller != "carregar_phase_out" %}
 <script src="{% static "ghost/js/textareaDinamico.js" %}"></script>
+{% endif %}
+{% if caller != "inicial" %}
+<script src="{% static "ghost/js/relatorioPhaseOut.js" %}"></script>
+{% endif %}
 
 {% endblock content %}

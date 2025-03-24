@@ -107,6 +107,10 @@ def explode_estrutura(
 
 	#primeira consulta no banco
 	resultado = get_estrutura_produto(codigo, data_referencia, engine)
+
+	if resultado.empty:
+		return pd.DataFrame(), pd.DataFrame()
+
 	estrutura = resultado.copy(deep=True)
 
 	if not abre_todos_os_PIs:
@@ -757,6 +761,8 @@ def gerar_multiestruturas(
 				traz_preco_futuro=traz_preco_futuro,
 				caller=caller
 			)
+			if estrutura.empty:
+				messages.info(request, f"Produto {produto} sem estrutura")
 
 			#EXCLUSIVIDADE
 			if caller == "phase_out" and not estrutura.empty:

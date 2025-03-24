@@ -4,22 +4,26 @@ from django.contrib import messages
 from django.conf import settings
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.http import HttpResponse
 
 import pandas as pd
 import sqlite3
 from sqlalchemy import text
 from datetime import datetime
+import locale
 from dateutil.relativedelta import relativedelta
 from io import StringIO
 from numpy import nan
 import json
 import xlwings as xw
+from win32com.client import constants
 from os import path
 
 from openpyxl import Workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill, Font,Color, Border,Side
 from openpyxl.utils import get_column_letter as gcl
+from openpyxl.formatting.rule import CellIsRule
 
 from ghost.queries import get_query_estoque_atual
 from ghost.views.estruturas import explode_estrutura, forma_string_codigos, gerar_multiestruturas
@@ -987,7 +991,7 @@ def carregar_estruturas_phase_out(request):
 
 	produtos = request.POST.get("codigos-produtos")
 
-	if not produtos: return redirect(reverse("ghost:ghost"))
+	if not produtos: return redirect(reverse("ghost:phase-out"))
 
 	engine = get_engine()
 	codigo_aleatorio = request.session.get("codigo-aleatorio")
@@ -996,8 +1000,6 @@ def carregar_estruturas_phase_out(request):
 	produtos_filtrados = [item for item in produtos if item != ""]
 
 	data_referencia = datetime.today().date()
-	data_str = data_referencia.strftime("%d-%m-%Y")
-	quant = 1
 
 	estruturas: pd.DataFrame
 	request, estruturas, _ = gerar_multiestruturas(
@@ -1007,6 +1009,11 @@ def carregar_estruturas_phase_out(request):
 		engine=engine,
 		caller="phase_out"
 	)
+
+	if estruturas.empty:
+		messages.info(request,"A consulta retornou sem resultados")
+		return redirect(reverse("ghost:phase-out"))
+
 
 	estruturas = preencher_qtds_itens_alternativos_phaseout(estruturas, engine)
 
@@ -1019,6 +1026,9 @@ def carregar_estruturas_phase_out(request):
 	estruturas, colunas_estoque = preencher_estoques_phase_out(estruturas, engine)
 
 	estruturas = preencher_pedidos_phase_out(estruturas, engine)
+
+	estruturas["Saldo Total"] = estruturas["Ttl Est (11, 14, 20)"].fillna(0) + estruturas["Pedidos"].fillna(0)
+	estruturas.loc[estruturas["Saldo Total"] == 0,"Saldo Total"] = float("nan")
 
 
 	# SALVAR NO BD
@@ -1033,7 +1043,7 @@ def carregar_estruturas_phase_out(request):
 	estruturas = estruturas.fillna("")
 
 	# cabecalhos, rows = get_cabecalhos_e_rows_dataframe(estruturas)
-	colunas_para_mesclar = get_colunas_para_mesclar(colunas_estoque)
+	colunas_para_mesclar = get_colunas_para_mesclar(estruturas)
 	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estruturas, colunas_para_mesclar)
 
 	context = {
@@ -1041,6 +1051,8 @@ def carregar_estruturas_phase_out(request):
 		"cabecalhos":cabecalhos,
 		"rows":rows,
 		"colunas_para_mesclar":colunas_para_mesclar,
+		"ignorar_js_tabela": True,
+		"codigo_aleatorio":codigo_aleatorio,
 	}
 
 	return render(request, "ghost/simuladordeproducao/phase_out.html", context)
@@ -1048,8 +1060,11 @@ def carregar_estruturas_phase_out(request):
 
 
 
-def get_colunas_para_mesclar(colunas_estoque):
-	return ["insumo","descricao_insumo","Exclusividade",*colunas_estoque, "Pedidos"]
+def get_colunas_para_mesclar(df: pd.DataFrame):
+
+	colunas_armazem = [x for x in df.columns if len(x) == 2]
+
+	return ["insumo","descricao_insumo","Exclusividade",*colunas_armazem,"Ttl Est (11, 14, 20)", "custo_medio", "Pedidos", "Saldo Total"]
 
 
 
@@ -1068,7 +1083,7 @@ def carregar_phase_out(request):
 	if not codigo_aleatorio: return redirect(reverse("ghost:phase-out"))
 
 	produtos = produtos.split("\r\n")
-	produtos_filtrados = [item for item in produtos if item != ""]
+	produtos_filtrados = [str(item).upper().strip() for item in produtos if item != ""]
 
 	data_referencia = datetime.today().date()
 
@@ -1080,6 +1095,10 @@ def carregar_phase_out(request):
 	# 	cursor.execute(f"DROP TABLE [{codigo_aleatorio}]")
 	# 	sqlite_conn.commit()
 	sqlite_conn.close()
+	
+	# DUPLICIDADE PRODUTO
+	estruturas = estruturas.loc[~estruturas["codigo_original"].isin(produtos_filtrados),:]
+
 
 	phouts: pd.DataFrame
 	request, phouts, _ = gerar_multiestruturas(
@@ -1114,6 +1133,17 @@ def carregar_phase_out(request):
 	phouts = preencher_pedidos_phase_out(phouts, engine)
 
 	estru_phouts = pd.concat([estruturas, phouts])
+
+	colunas_armazem = sorted([x for x in estru_phouts.columns if len(x) == 2])
+	estru_phouts = estru_phouts[[
+		"insumo","descricao_insumo","alternativo_de","codigo_original","descricao_cod_original",
+		"quant_utilizada","Exclusividade","Status","origem",*colunas_armazem,"Ttl Est (11, 14, 20)",
+		"custo_medio","Pedidos"
+	]]
+
+	estru_phouts["Saldo Total"] = estru_phouts["Ttl Est (11, 14, 20)"].fillna(0) + estru_phouts["Pedidos"].fillna(0)
+	estru_phouts.loc[estru_phouts["Saldo Total"] == 0,"Saldo Total"] = float("nan")
+
 	estru_phouts = estru_phouts.sort_values(by=["insumo","codigo_original"],ascending=[True,True])
 
 	request = salvar_dataframe_no_bd(
@@ -1124,18 +1154,20 @@ def carregar_phase_out(request):
 
 	estru_phouts = estru_phouts.fillna("")
 
-	colunas_para_mesclar = get_colunas_para_mesclar(colunas_estoque)
+	colunas_para_mesclar = get_colunas_para_mesclar(estru_phouts)
 	cabecalhos, rows = get_cabecalhos_e_rows_phaseout(estru_phouts, colunas_para_mesclar)
 
 	# gerar_simulacao_excel(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar, colunas_estoque)
 	# relatorio_phaseout_com_openpyxl(codigo_aleatorio,cabecalhos,rows,colunas_para_mesclar)
-	relatorio_phaseout_por_produto(codigo_aleatorio,colunas_para_mesclar)
+	# relatorio_phaseout_por_produto(codigo_aleatorio,colunas_para_mesclar)
 
 	context = {
 		"caller":"carregar_phase_out",
 		"cabecalhos":cabecalhos,
 		"rows":rows,
 		"colunas_para_mesclar":colunas_para_mesclar,
+		"ignorar_js_tabela": True,
+		"codigo_aleatorio": codigo_aleatorio,
 	}
 
 	return render(request, "ghost/simuladordeproducao/phase_out.html", context)
@@ -1255,14 +1287,14 @@ def preencher_estoques_phase_out(df:pd.DataFrame, engine):
 	})
 
 	# CALCULA O CUSTO MÉDIO PONDERADO
-	estoque["total"] = estoque["quant"] * estoque["unitario"]
-	custo_medio = estoque.groupby(by="codigo").apply(lambda x: round( x["total"].sum() / x["quant"].sum() ,5)).reset_index(name='custo_medio')
+	estoque["total"] = estoque["quant"].fillna(0) * estoque["unitario"].fillna(0)
+	custo_medio = estoque.groupby(by="codigo").apply(lambda x: round( x["total"].fillna(0).sum() / x["quant"].fillna(0).sum() ,5)).reset_index(name='custo_medio')
 
 	# FORMA O ESTOQUE_PIVOT
 	estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
 	arm_exist = ["11","14","20"]
 	arm_verificados = [arm for arm in arm_exist if arm in estoque_pivot.columns]
-	estoque_pivot["Ttl Est (11, 14, 20)"] = estoque_pivot[arm_verificados].sum(axis=1)
+	estoque_pivot["Ttl Est (11, 14, 20)"] = estoque_pivot[arm_verificados].sum(axis=1).round(5)
 
 	estoque_pivot = estoque_pivot.merge(custo_medio, on="codigo")
 
@@ -1428,12 +1460,23 @@ def relatorio_phaseout_com_openpyxl(codigo_aleatorio,cabecalhos,rows,colunas_par
 
 
 
-def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_meses = 6):
+@api_view(["POST"])
+def relatorio_phaseout_por_produto(request):
 
+	data = request.data
+
+	codigo_aleatorio = data.get("codigo_aleatorio")
+
+	qtd_meses = 6
 	df:pd.DataFrame
 	sqlite_conn = sqlite3.connect("db.sqlite3")
 	df = pd.read_sql(f"SELECT * FROM [{codigo_aleatorio}]",sqlite_conn).drop(columns="index")
 	sqlite_conn.close()
+
+	if df.empty:
+		return Response({"sucesso":False,"erro":"Consulta Vazia"})
+
+	colunas_para_mesclar = get_colunas_para_mesclar(df)
 
 	wb = Workbook()
 	ws = wb.active
@@ -1442,10 +1485,23 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_m
 	produtos = df.loc[:,"insumo"].drop_duplicates()
 	prim_lin = 2
 	prim_col = 2
-	cinza_claro = Color(rgb_para_hex(214,214,214))
+
+	# CORES
+	cinza_claro = Color(rgb_para_hex(235,235,235))
 	cinza_escuro = Color(rgb_para_hex(50,50,50))
+	cinza_menos_escuro = Color(rgb_para_hex(140,140,140))
 	branco = Color(rgb_para_hex(255,255,255))
-	borda_fina_style = Side(style="thin")
+	vermelho_escuro_cor = Color(rgb_para_hex(156,0,6))
+	vermelho_claro_cor = Color(rgb_para_hex(255,199,206))
+	verde_claro_cor = Color(rgb_para_hex(198,239,206))
+	verde_escuro_cor = Color(rgb_para_hex(0,97,0))
+	amarelo_escuro_cor = Color(rgb_para_hex(156,87,0))
+	amarelo_claro_cor = Color(rgb_para_hex(255,235,156))
+
+	# BORDAS
+	borda_fina_style = Side(style="dashDot")
+	borda_pontilhada_style = Side(style="dashDot")
+	borda_pont_branca_style = Side(style="dashDot", color=f"{rgb_para_hex(255,255,255)}")
 	borda_fina = Border(
 		left=borda_fina_style,
 		right=borda_fina_style,
@@ -1458,46 +1514,95 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_m
 		top=borda_fina_style,
 		bottom=Side(style="thick")
 	)
+	borda_pontilhada_preta = Border(
+		left=borda_pontilhada_style,
+		right=borda_pontilhada_style,
+		top=borda_pontilhada_style,
+		bottom=borda_pontilhada_style
+	)
+	borda_pontilhada_branca = Border(
+		left=borda_pont_branca_style,
+		right=borda_pont_branca_style,
+		top=borda_pont_branca_style,
+		bottom=borda_pont_branca_style
+	)
+
+	# FUNDOS
 	fundo_escuro = PatternFill(start_color=cinza_escuro,patternType="solid")
+	fundo_menos_escuro = PatternFill(start_color=cinza_menos_escuro,patternType="solid")
+	fundo_vermelho_claro = PatternFill(start_color=vermelho_claro_cor,end_color=vermelho_claro_cor,patternType="solid")
+	fundo_verde_claro = PatternFill(start_color=verde_claro_cor,end_color=verde_claro_cor,patternType="solid")
+	fundo_amarelo_claro = PatternFill(start_color=amarelo_claro_cor,end_color=amarelo_claro_cor,patternType="solid")
+
+
+	# FONTES
 	fonte_branca = Font(color=branco,b=True)
+	fonte_verde = Font(color=verde_escuro_cor)
+	fonte_vermelha = Font(color=vermelho_escuro_cor)
+	fonte_amarela = Font(color=amarelo_escuro_cor)
+
+	# REGRAS
+	regra_vermelho = CellIsRule(operator="lessThan",formula=["0"],font=fonte_vermelha,fill=fundo_vermelho_claro)
+	regra_verde = CellIsRule(operator="greaterThan",formula=["0"],font=fonte_verde,fill=fundo_verde_claro)
+	regra_amarelo = CellIsRule(operator="equal",formula=["0"],font=fonte_amarela,fill=fundo_amarelo_claro)
+
 
 	lin = prim_lin
 	col = prim_col
 	cab_col = {}
 	mesclagem = []
+	cols_para_formatacao_condicional = set()
+
+	def estilo_celula_cabecalho(celula):
+		celula.fill = fundo_escuro
+		celula.font = fonte_branca
+		celula.border = borda_pontilhada_branca
 
 	for cabecalho in df.columns:
 		celula = ws.cell(lin,col,cabecalho)
-		celula.fill = fundo_escuro
-		celula.font = fonte_branca
+		estilo_celula_cabecalho(celula)
 		cab_col.update({cabecalho:col})
+		if cabecalho == "custo_medio":
+			coluna_custo_medio = col # para a fórmula da ultima coluna
 		col += 1
 
 		# CABEÇALHOS DOS MESES
-		mes_atual = datetime.now()
-		for m in range(qtd_meses):
+	locale.setlocale(locale.LC_TIME, "Portuguese_Brazil.1252")
+	mes_atual = datetime.now()
+	for m in range(qtd_meses):
 
-			mes_atual = mes_atual + relativedelta(months=m)
+		mes_atual = mes_atual + relativedelta(months=m)
 
-			celula = ws.cell(lin-1,col,mes_atual.strftime("%B/%y"))
-			celula.fill = fundo_escuro
-			celula.font = fonte_branca
-			mesclagem.append(f"{gcl(col)}{lin-1}:{gcl(col+2)}{lin-1}")
+		celula = ws.cell(lin-1,col,mes_atual.strftime("%B/%y"))
+		estilo_celula_cabecalho(celula)
+		mesclagem.append(f"{gcl(col)}{lin-1}:{gcl(col+2)}{lin-1}")
 
-			celula = ws.cell(lin,col,"Saldo Inicial")
-			celula.fill = fundo_escuro
-			celula.font = fonte_branca
-			col += 1
+		celula = ws.cell(lin,col,"Saldo Inicial")
+		estilo_celula_cabecalho(celula)
+		cols_para_formatacao_condicional.add(col)
+		col += 1
 
-			celula = ws.cell(lin, col, "Necessidade")
-			celula.fill = fundo_escuro
-			celula.font = fonte_branca
-			col += 1
+		celula = ws.cell(lin, col, "Necessidade")
+		estilo_celula_cabecalho(celula)
+		col += 1
 
-			celula = ws.cell(lin, col, "Saldo Final")
-			celula.fill = fundo_escuro
-			celula.font = fonte_branca
-			col += 1
+		celula = ws.cell(lin, col, "Saldo Final")
+		estilo_celula_cabecalho(celula)
+		cols_para_formatacao_condicional.add(col)
+		col += 1
+	
+	celula = ws.cell(lin,col,"E&O (R$)")
+	estilo_celula_cabecalho(celula)
+
+	def estilo_celula_corpo(celula, cor_da_vez = None):
+		if cor_da_vez:
+			celula.fill = PatternFill(start_color=cor_da_vez,patternType="solid")
+		celula.border = borda_fina
+	
+	def adicionar_formatacao_condicional(coord):
+		ws.conditional_formatting.add(coord,regra_amarelo)
+		ws.conditional_formatting.add(coord,regra_verde)
+		ws.conditional_formatting.add(coord,regra_vermelho)
 
 
 	lin += 1
@@ -1506,6 +1611,7 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_m
 	cor_da_vez = cinza_claro
 	for produto in produtos:
 		df_prod  = df.loc[df["insumo"] == produto,:]
+		qtd_linhas = df_prod.shape[0]
 
 		if cor_da_vez == cinza_claro:
 			cor_da_vez = branco
@@ -1517,42 +1623,105 @@ def relatorio_phaseout_por_produto(codigo_aleatorio, colunas_para_mesclar, qtd_m
 			col = prim_col
 			for cab in df.columns:
 				celula = ws.cell(lin,col,row[cab])
-				celula.fill = PatternFill(start_color=cor_da_vez)
-				celula.border = borda_fina
+				estilo_celula_corpo(celula, cor_da_vez)
 				col += 1
 			
-			if lin == linini:
-				celula = ws.cell(lin,col,f"={gcl(col-1)}{lin}")
-				# parte das fórmuas de quantidade
+			prim_col_formula = col
+			
+			for m in range(qtd_meses):
+				if lin == linini:
+					formula = f"={gcl(col-1)}{lin}"
+					celula = ws.cell(lin,col,formula)
+				else:
+					formula = f"={gcl(col+2)}{lin-1}"
+					celula = ws.cell(lin,col,formula)
+				estilo_celula_corpo(celula)
+				col += 1
+
+				celula = ws.cell(lin,col,0)
+				estilo_celula_corpo(celula)
+				col += 1
+
+				formula = f"={gcl(col-2)}{lin}-{gcl(col-1)}{lin}"
+				celula = ws.cell(lin,col,formula)
+				estilo_celula_corpo(celula)
+				col += 1
 
 			lin += 1
+
+		col = prim_col_formula
+
+		for c in range(prim_col, prim_col_formula):
+			ws.cell(lin,c).fill = fundo_menos_escuro
+
+		for m in range(qtd_meses):
+			formula = f"={gcl(col-1)}{linini}"
+			celula = ws.cell(lin,col,formula)
+			col += 1
+
+			formula = f"=SUM({gcl(col)}{linini}:{gcl(col)}{lin-1})"
+			celula = ws.cell(lin,col,formula)
+			celula.fill = PatternFill(start_color=cinza_claro,patternType="solid")
+			col += 1
+
+			formula = f"={gcl(col-2)}{lin}-{gcl(col-1)}{lin}"
+			celula = ws.cell(lin,col,formula)
+			col += 1
 		
+		formula = f"=IF({gcl(coluna_custo_medio)}{lin-1}*{gcl(col-1)}{lin}<0,0,{gcl(coluna_custo_medio)}{lin-1}*{gcl(col-1)}{lin})"
+		celula = ws.cell(lin,col,formula)
+		adicionar_formatacao_condicional(celula.coordinate)
 		
 		
 		#mesclagem
-		if df_prod.shape[0] > 1:
+		if qtd_linhas > 1:
 			for col_mescla in colunas_para_mesclar:
 				letra_col_mescla = gcl(cab_col[col_mescla])
-				mesclagem.append(f"{letra_col_mescla}{linini}:{letra_col_mescla}{lin-1}")
+				if col_mescla in ["insumo","descricao_insumo"]:
+					mesclagem.append(f"{letra_col_mescla}{linini}:{letra_col_mescla}{lin}")
+				else:
+					mesclagem.append(f"{letra_col_mescla}{linini}:{letra_col_mescla}{lin-1}")
+		else:
+			mesclagem.append(f"{gcl(cab_col["insumo"])}{lin-1}:{gcl(cab_col["insumo"])}{lin}")
+			mesclagem.append(f"{gcl(cab_col["descricao_insumo"])}{lin-1}:{gcl(cab_col["descricao_insumo"])}{lin}")
 
-		for celula in ws[f"{gcl(prim_col)}{lin-1}:{gcl(col-1)}{lin-1}"][0]:
+		for celula in ws[f"{gcl(prim_col)}{lin}:{gcl(col)}{lin}"][0]:
 			celula.border = borda_grossa_inferior
+		
+		lin += 1
+	
+	for c in cols_para_formatacao_condicional:
+		cc = gcl(c)
+		str_formatacao_condicional = f"{cc}{prim_lin+1}:{cc}{lin-1}"
+		adicionar_formatacao_condicional(str_formatacao_condicional)
+	
+
 	
 	caminho = path.join(settings.MEDIA_ROOT,f"{codigo_aleatorio}.xlsx")
 	wb.save(caminho)
 
 	print("xlwings")
 
-	app = xw.App(visible=True,add_book=False)
+	app = xw.App(visible=False,add_book=False)
 	xwwb = app.books.open(caminho)
 	xwws = xwwb.sheets("Simulador")
 
 	for mescla in mesclagem:
 		xwws.range(mescla).merge()
 		xwws.range(mescla).api.VerticalAlignment = -4108
+		xwws.range(mescla).api.HorizontalAlignment = constants.xlCenter
 	
 	xwws.range(f"{gcl(prim_col)}:{gcl(col - 1)}").autofit()
 	
 	xwwb.save()
 	xwwb.close()
 	app.quit()
+
+	with open(caminho, "rb") as file:
+
+		response = HttpResponse(
+			file.read(),
+			content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		)
+		response["Content-Disposition"] = f'attachment; filename="{codigo_aleatorio}.xlsx"'
+	return response
