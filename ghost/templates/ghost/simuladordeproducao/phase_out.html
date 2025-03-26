@@ -10,11 +10,9 @@
 <div class="titulo-form borda-dupla-inferior titulo-simulador-de-producao">
 	Phase Out
 	{% if caller != "inicial" %}
-	<form class="botao-relatorio-phase-out" method="post">
-		{% csrf_token %}
-		<input type="hidden" name="codigo-identificador" id="codigo-identificador-id2">
-		<button class="botao-pequeno" id="botao-relatorio-phase-out-id" data-code="{{codigo_aleatorio}}">Baixar Relatório em Excel</button>
-	</form>
+
+	<button class="botao-pequeno botao-relatorio-phase-out" id="botao-relatorio-phase-out-id" data-code="{{codigo_aleatorio}}">Baixar Relatório em Excel</button>
+	
 	{% endif %}
 </div>
 	{% if caller == "inicial" %}

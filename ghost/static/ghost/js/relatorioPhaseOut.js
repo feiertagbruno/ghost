@@ -19,10 +19,12 @@ async function baixar_relatrio_phase_out() {
       "X-CSRFToken": csrf
     },
     body: JSON.stringify({
-      codigo_aleatorio: data_code
+      codigo_aleatorio: data_code,
+      codigo_processamento: codigo_processamento
     })
   })
   const blob = await response.blob()
+  remove_texto_tela_aguarde()
   const file = new File([blob], `${data_code}.xlsx`, {type:blob.type})
   const url = window.URL.createObjectURL(file)
 

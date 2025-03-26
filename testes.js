@@ -1,16 +1,5 @@
-function a(b, c, d) {
+a = null
 
-  if (b) {
-    console.log(b)
-  }
-  if (c) {
-    console.log(c)
-  }
-  if(d) {
-    console.log(d)
-  }
-  
-
+if (!a) {
+  console.log("ok")
 }
-
-a(1,undefined,2)

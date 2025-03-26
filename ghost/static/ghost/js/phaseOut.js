@@ -2,8 +2,24 @@
 
 const explode_pis = document.getElementById("explode-pis-id")
 const botao_carregar = document.getElementById("botao-multi-simples")
-const codigo_processamento = gerarCodigoAleatorio(10, document.getElementsByName("codigo-identificador"))
+let codigo_processamento = getCookie("codigo_identificador")
 const csrf = getCSRFToken()
+
+console.log(getCookie("codigo_identificador"))
+
+if (!codigo_processamento) {
+  codigo_processamento = gerarCodigoAleatorio(10, document.getElementsByName("codigo-identificador"))
+  document.cookie = `codigo_identificador=${codigo_processamento}`
+} else {
+  const campos_codigo_identificador = document.getElementsByName("codigo-identificador")
+  
+  if (campos_codigo_identificador.length > 0) {
+    campos_codigo_identificador.forEach(el => {
+      // @ts-ignore
+      el.value = codigo_processamento
+    })
+  }
+}
 
 if (explode_pis) {
   explode_pis.onchange = el => {

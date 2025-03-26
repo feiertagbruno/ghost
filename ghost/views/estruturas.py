@@ -731,15 +731,20 @@ def gerar_multiestruturas(
 	compilado_custos_totais = pd.DataFrame()
 
 	data_referencia = tratamento_data_referencia(data_referencia)
+	codigo_identificador = request.POST.get("codigo-identificador","a")
 
 	################ processamento
-	processamento = Processamento.objects.get_or_create(
-		codigo_identificador = request.POST.get("codigo-identificador","a"),
+	processamento = Processamento.objects.filter(codigo_identificador=codigo_identificador)
+	if processamento.exists():
+		processamento.delete()
+
+	processamento = Processamento.objects.create(
+		codigo_identificador = codigo_identificador,
 		caller = caller,
 		porcentagem = "",
 		mensagem1 = "Processando",
 		mensagem2 = ""
-	)[0]
+	)
 	################
 
 	for index, produto in enumerate(produtos):

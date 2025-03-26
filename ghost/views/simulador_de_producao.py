@@ -995,13 +995,18 @@ def carregar_estruturas_phase_out(request):
 	if not produtos: return redirect(reverse("ghost:phase-out"))
 
 	################ processamento
-	processamento = Processamento.objects.get_or_create(
-		codigo_identificador = request.POST.get("codigo-identificador","a"),
+	codigo_identificador = request.POST.get("codigo-identificador","a")
+	processamento = Processamento.objects.filter(codigo_identificador = codigo_identificador)
+	if processamento.exists():
+		processamento.delete()
+
+	processamento = Processamento.objects.create(
+		codigo_identificador = codigo_identificador,
 		caller = "phase_out",
 		porcentagem = "",
 		mensagem1 = "Processando",
 		mensagem2 = ""
-	)[0]
+	)
 	################
 
 	engine = get_engine()
@@ -1475,15 +1480,20 @@ def relatorio_phaseout_com_openpyxl(codigo_aleatorio,cabecalhos,rows,colunas_par
 def relatorio_phaseout_por_produto(request):
 
 	data = request.data
+	codigo_identificador = data.get("codigo_processamento")
 
 	################ processamento
-	processamento = Processamento.objects.get_or_create(
-		codigo_identificador = request.POST.get("codigo-identificador","a"),
+	processamento = Processamento.objects.filter(codigo_identificador=codigo_identificador)
+	if processamento.exists():
+		processamento.delete()
+
+	processamento = Processamento.objects.create(
+		codigo_identificador = data.get("codigo_processamento","a"),
 		caller = "phase_out",
 		porcentagem = "",
 		mensagem1 = "Processando",
-		mensagem2 = ""
-	)[0]
+		mensagem2 = "Preparando informações"
+	)
 	################
 
 	codigo_aleatorio = data.get("codigo_aleatorio")
@@ -1574,6 +1584,11 @@ def relatorio_phaseout_por_produto(request):
 	mesclagem = []
 	cols_para_formatacao_condicional = set()
 
+	################ processamento
+	processamento.mensagem2 = "Imputando Cabeçalhos"
+	processamento.save()
+	################
+
 	def estilo_celula_cabecalho(celula):
 		celula.fill = fundo_escuro
 		celula.font = fonte_branca
@@ -1625,12 +1640,21 @@ def relatorio_phaseout_por_produto(request):
 		ws.conditional_formatting.add(coord,regra_verde)
 		ws.conditional_formatting.add(coord,regra_vermelho)
 
-
 	lin += 1
 
 	df_prod: pd.DataFrame
 	cor_da_vez = cinza_claro
+	index = 0
 	for produto in produtos:
+		
+		index += 1
+
+		################ processamento
+		processamento.porcentagem = f'{int((index+1)/len(produtos)*20)}%'
+		processamento.mensagem2 = f'Imprimindo {produto}'
+		processamento.save()
+		################
+		
 		df_prod  = df.loc[df["insumo"] == produto,:]
 		qtd_linhas = df_prod.shape[0]
 
@@ -1727,12 +1751,32 @@ def relatorio_phaseout_por_produto(request):
 	xwwb = app.books.open(caminho)
 	xwws = xwwb.sheets("Simulador")
 
+	################ processamento
+	processamento.mensagem2 = f'Mesclando células'
+	processamento.save()
+	################
+	
+	index = 0
 	for mescla in mesclagem:
+
+		index += 1
+		################ processamento
+		processamento.porcentagem = f'{int((index+1)/len(mesclagem)*79)+20}%'
+		processamento.save()
+		################
+		
 		xwws.range(mescla).merge()
 		xwws.range(mescla).api.VerticalAlignment = -4108
 		xwws.range(mescla).api.HorizontalAlignment = constants.xlCenter
 	
 	xwws.range(f"{gcl(prim_col)}:{gcl(col - 1)}").autofit()
+
+	################ processamento
+	processamento.porcentagem = '100%'
+	processamento.mensagem1 = 'Concluído'
+	processamento.mensagem2 = ''
+	processamento.save()
+	################
 	
 	xwwb.save()
 	xwwb.close()
