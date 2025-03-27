@@ -1054,6 +1054,7 @@ def carregar_estruturas_phase_out(request):
 		inicial_tabela="phaseout",
 		codigo_aleatorio=codigo_aleatorio
 	)
+	codigo_aleatorio = request.session.get("codigo-aleatorio")
 	# SALVAR NO BD fim
 
 	estruturas = estruturas.fillna("")

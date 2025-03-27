@@ -751,7 +751,7 @@ def gerar_multiestruturas(
 		produto = produto.strip().upper()
 
 		################ processamento
-		processamento.porcentagem = f'{int((index+1)/len(produtos)*98)}%'
+		processamento.porcentagem = f'{int((index)/len(produtos)*98)}%'
 		processamento.mensagem2 = f'Extraindo estrutura de {produto}'
 		processamento.save()
 		################
@@ -786,6 +786,12 @@ def gerar_multiestruturas(
 				compilado_custos_totais = pd.concat([compilado_custos_totais, custos_totais_produto])
 		else:
 			messages.info(request, f"Produto {produto} contém um erro de digitação.")
+		
+		################ processamento
+		processamento.porcentagem = f'{int((index+1)/len(produtos)*98)}%'
+		processamento.mensagem2 = f'Extraindo estrutura de {produto}'
+		processamento.save()
+		################
 	
 	if not compilado_custos_totais.empty:
 		compilado_custos_totais = compilado_custos_totais.reset_index(drop=True)
