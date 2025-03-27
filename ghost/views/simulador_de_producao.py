@@ -1727,8 +1727,8 @@ def relatorio_phaseout_por_produto(request):
 				else:
 					mesclagem.append(f"{letra_col_mescla}{linini}:{letra_col_mescla}{lin-1}")
 		else:
-			mesclagem.append(f"{gcl(cab_col["insumo"])}{lin-1}:{gcl(cab_col["insumo"])}{lin}")
-			mesclagem.append(f"{gcl(cab_col["descricao_insumo"])}{lin-1}:{gcl(cab_col["descricao_insumo"])}{lin}")
+			mesclagem.append(f"{gcl(cab_col['insumo'])}{lin-1}:{gcl(cab_col['insumo'])}{lin}")
+			mesclagem.append(f"{gcl(cab_col['descricao_insumo'])}{lin-1}:{gcl(cab_col['descricao_insumo'])}{lin}")
 
 		for celula in ws[f"{gcl(prim_col)}{lin}:{gcl(col)}{lin}"][0]:
 			celula.border = borda_grossa_inferior
