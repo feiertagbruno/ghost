@@ -5,11 +5,9 @@ const botao_carregar = document.getElementById("botao-multi-simples")
 let codigo_processamento = getCookie("codigo_identificador")
 const csrf = getCSRFToken()
 
-console.log(getCookie("codigo_identificador"))
-
 if (!codigo_processamento) {
   codigo_processamento = gerarCodigoAleatorio(10, document.getElementsByName("codigo-identificador"))
-  document.cookie = `codigo_identificador=${codigo_processamento}`
+  document.cookie = `codigo_identificador=${codigo_processamento};path=/`
 } else {
   const campos_codigo_identificador = document.getElementsByName("codigo-identificador")
   
@@ -20,7 +18,7 @@ if (!codigo_processamento) {
     })
   }
 }
-
+console.log(codigo_processamento)
 if (explode_pis) {
   explode_pis.onchange = el => {
     // @ts-ignore
