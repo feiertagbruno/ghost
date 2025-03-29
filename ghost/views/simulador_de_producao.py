@@ -13,7 +13,7 @@ from datetime import datetime
 import locale
 from dateutil.relativedelta import relativedelta
 from io import StringIO
-from numpy import nan
+from numpy import nan, where
 import json
 import xlwings as xw
 from win32com.client import constants
@@ -1029,12 +1029,15 @@ def carregar_estruturas_phase_out(request):
 	if estruturas.empty:
 		messages.info(request,"A consulta retornou sem resultados")
 		return redirect(reverse("ghost:phase-out"))
+	
+	estruturas["ori_alt"] = where(estruturas["alternativo_de"].isna(),"Original","Alternativo")
 
+	estruturas = preencher_info_produto(estruturas, engine)
 
 	estruturas = preencher_qtds_itens_alternativos_phaseout(estruturas, engine)
 
 	estruturas = estruturas.sort_values(by="insumo",ascending=True)
-	estruturas = estruturas[["insumo","descricao_insumo","alternativo_de",
+	estruturas = estruturas[["insumo","descricao_insumo","ori_alt","alternativo_de","origem_produto","tipo",
 		"codigo_original","descricao_cod_original","quant_utilizada","Exclusividade"]]
 
 	estruturas["Status"] = "Corrente"
@@ -1076,12 +1079,25 @@ def carregar_estruturas_phase_out(request):
 
 
 
+def preencher_info_produto(df: pd.DataFrame, engine):
+	todos_os_produtos = forma_string_codigos(df["insumo"])
+	info_produtos = get_info_produtos(todos_os_produtos,engine)
+	df = df.merge(
+		info_produtos[["codigo","origem_produto","tipo_produto"]],how="left",
+		left_on="insumo",
+		right_on="codigo"
+	).drop(columns=["codigo"]).rename(columns={"tipo_produto":"tipo"})
+
+	return df
+
+
+
 
 def get_colunas_para_mesclar(df: pd.DataFrame):
 
 	colunas_armazem = [x for x in df.columns if len(x) == 2]
 
-	return ["insumo","descricao_insumo","Exclusividade",*colunas_armazem,"Ttl Est (11, 14, 20)", "custo_medio", "Pedidos", "Saldo Total"]
+	return ["insumo","descricao_insumo","ori_alt","tipo","Exclusividade","origem_produto",*colunas_armazem,"Ttl Est (11, 14, 20)", "custo_medio", "Pedidos", "Saldo Total"]
 
 
 
@@ -1126,9 +1142,13 @@ def carregar_phase_out(request):
 		caller="phase_out"
 	)
 
+	phouts["ori_alt"] = where(phouts["alternativo_de"].isna(),"Original","Alternativo")
+
+	phouts = preencher_info_produto(phouts, engine)
+
 	phouts = preencher_qtds_itens_alternativos_phaseout(phouts, engine)
 
-	phouts = phouts[["insumo","descricao_insumo","alternativo_de",
+	phouts = phouts[["insumo","descricao_insumo","ori_alt","alternativo_de","origem_produto","tipo",
 		"codigo_original","descricao_cod_original","quant_utilizada","Exclusividade"]]
 
 	# EXCLUSIVIDADE PHASE OUTS
@@ -1153,8 +1173,8 @@ def carregar_phase_out(request):
 
 	colunas_armazem = sorted([x for x in estru_phouts.columns if len(x) == 2])
 	estru_phouts = estru_phouts[[
-		"insumo","descricao_insumo","alternativo_de","codigo_original","descricao_cod_original",
-		"quant_utilizada","Exclusividade","Status","origem",*colunas_armazem,"Ttl Est (11, 14, 20)",
+		"insumo","descricao_insumo","ori_alt","alternativo_de","codigo_original","descricao_cod_original",
+		"quant_utilizada","Exclusividade","Status","origem_produto","tipo",*colunas_armazem,"Ttl Est (11, 14, 20)",
 		"custo_medio","Pedidos"
 	]]
 
@@ -1308,7 +1328,7 @@ def preencher_estoques_phase_out(df:pd.DataFrame, engine):
 	custo_medio = estoque.groupby(by="codigo").apply(lambda x: round( x["total"].fillna(0).sum() / x["quant"].fillna(0).sum() ,5)).reset_index(name='custo_medio')
 
 	# FORMA O ESTOQUE_PIVOT
-	estoque_pivot = estoque.pivot(index=["codigo","tipo","descricao","origem"], columns="armazem", values="quant").reset_index()
+	estoque_pivot = estoque.pivot(index=["codigo","descricao"], columns="armazem", values="quant").reset_index()
 	arm_exist = ["11","14","20"]
 	arm_verificados = [arm for arm in arm_exist if arm in estoque_pivot.columns]
 	estoque_pivot["Ttl Est (11, 14, 20)"] = estoque_pivot[arm_verificados].sum(axis=1).round(5)
@@ -1319,9 +1339,9 @@ def preencher_estoques_phase_out(df:pd.DataFrame, engine):
 		estoque_pivot,how="left",
 		left_on="insumo",
 		right_on="codigo"
-	).drop(columns=["codigo","tipo","descricao"])
+	).drop(columns=["codigo","descricao"])
 
-	colunas = list(estoque_pivot.drop(columns=["codigo","tipo","descricao"]).columns)
+	colunas = list(estoque_pivot.drop(columns=["codigo","descricao"]).columns)
 
 	return df, colunas
 
@@ -1419,8 +1439,6 @@ def relatorio_phaseout_com_openpyxl(codigo_aleatorio,cabecalhos,rows,colunas_par
 	ws = wb.active
 	ws.title = "Simulador"
 
-	print("openpyxl")
-
 	prim_lin = 2
 	prim_col = 2
 
@@ -1482,6 +1500,8 @@ def relatorio_phaseout_por_produto(request):
 
 	data = request.data
 	codigo_identificador = data.get("codigo_processamento")
+	mesclar = True
+	porcent = 20 if mesclar else 79
 
 	################ processamento
 	processamento = Processamento.objects.filter(codigo_identificador=codigo_identificador)
@@ -1512,9 +1532,11 @@ def relatorio_phaseout_por_produto(request):
 
 	wb = Workbook()
 	ws = wb.active
+	ws2 = wb.create_sheet(title="Demanda")
 	ws.title = "Simulador"
 
 	produtos = df.loc[:,"insumo"].drop_duplicates()
+	originais = df.loc[:,"codigo_original"].drop_duplicates()
 	prim_lin = 2
 	prim_col = 2
 
@@ -1603,14 +1625,26 @@ def relatorio_phaseout_por_produto(request):
 			coluna_custo_medio = col # para a fórmula da ultima coluna
 		col += 1
 
+	prim_lin_ws2 = lin_ws2 = 2
+	prim_col_ws2 = col_ws2 = 2
+	ws2.cell(lin_ws2,col_ws2,"Produto")
+	for ori in originais:
+		lin_ws2 += 1
+		ws2.cell(lin_ws2,col_ws2,ori)
+	ult_lin_ws2 = lin_ws2
+	col_ws2 += 1
+
 		# CABEÇALHOS DOS MESES
 	locale.setlocale(locale.LC_TIME, "Portuguese_Brazil.1252")
 	mes_atual = datetime.now()
 	for m in range(qtd_meses):
 
-		mes_atual = mes_atual + relativedelta(months=m)
+		mes_atual_str = mes_atual.strftime("%B/%y")
+		ws2.cell(prim_lin_ws2,col_ws2,mes_atual_str)
+		for lin_ws2 in range(prim_lin_ws2+1,ult_lin_ws2+1):
+			ws2.cell(lin_ws2,col_ws2,0)
 
-		celula = ws.cell(lin-1,col,mes_atual.strftime("%B/%y"))
+		celula = ws.cell(lin-1,col,mes_atual_str)
 		estilo_celula_cabecalho(celula)
 		mesclagem.append(f"{gcl(col)}{lin-1}:{gcl(col+2)}{lin-1}")
 
@@ -1627,6 +1661,9 @@ def relatorio_phaseout_por_produto(request):
 		estilo_celula_cabecalho(celula)
 		cols_para_formatacao_condicional.add(col)
 		col += 1
+
+		mes_atual = mes_atual + relativedelta(months=1)
+		col_ws2 += 1
 	
 	celula = ws.cell(lin,col,"E&O (R$)")
 	estilo_celula_cabecalho(celula)
@@ -1651,7 +1688,7 @@ def relatorio_phaseout_por_produto(request):
 		index += 1
 
 		################ processamento
-		processamento.porcentagem = f'{int((index+1)/len(produtos)*20)}%'
+		processamento.porcentagem = f'{int((index+1)/len(produtos)*porcent)}%'
 		processamento.mensagem2 = f'Imprimindo {produto}'
 		processamento.save()
 		################
@@ -1676,21 +1713,29 @@ def relatorio_phaseout_por_produto(request):
 			
 			for m in range(qtd_meses):
 				if lin == linini:
-					formula = f"={gcl(col-1)}{lin}"
-					celula = ws.cell(lin,col,formula)
+					if col == prim_col_formula:
+						formula = f"={gcl(col-1)}{lin}"
+						celula = ws.cell(lin,col,formula)
+					else:
+						formula = f"={gcl(col-1)}{lin+qtd_linhas}"
+						celula = ws.cell(lin,col,formula)
 				else:
-					formula = f"={gcl(col+2)}{lin-1}"
-					celula = ws.cell(lin,col,formula)
+						formula = f"={gcl(col+2)}{lin-1}"
+						celula = ws.cell(lin,col,formula)
 				estilo_celula_corpo(celula)
 				col += 1
-
-				celula = ws.cell(lin,col,0)
+			
+				formula = f"=IF({gcl(cab_col['ori_alt'])}{linini}=\"Alternativo\",0,"\
+					f"VLOOKUP({gcl(cab_col['codigo_original'])}{lin},'{ws2.title}'!{gcl(prim_col_ws2)}:"\
+					f"{gcl(m+prim_col_ws2+1)},{m+2},0)*{gcl(cab_col['quant_utilizada'])}{lin})"
+				celula = ws.cell(lin,col,formula)
 				estilo_celula_corpo(celula)
 				col += 1
 
 				formula = f"={gcl(col-2)}{lin}-{gcl(col-1)}{lin}"
 				celula = ws.cell(lin,col,formula)
 				estilo_celula_corpo(celula)
+
 				col += 1
 
 			lin += 1
@@ -1746,42 +1791,42 @@ def relatorio_phaseout_por_produto(request):
 	caminho = path.join(settings.MEDIA_ROOT,f"{codigo_aleatorio}.xlsx")
 	wb.save(caminho)
 
-	print("xlwings")
+	if mesclar:
 
-	app = xw.App(visible=False,add_book=False)
-	xwwb = app.books.open(caminho)
-	xwws = xwwb.sheets("Simulador")
+		app = xw.App(visible=False,add_book=False)
+		xwwb = app.books.open(caminho)
+		xwws = xwwb.sheets("Simulador")
 
-	################ processamento
-	processamento.mensagem2 = f'Mesclando células'
-	processamento.save()
-	################
-	
-	index = 0
-	for mescla in mesclagem:
-
-		index += 1
 		################ processamento
-		processamento.porcentagem = f'{int((index+1)/len(mesclagem)*79)+20}%'
+		processamento.mensagem2 = f'Mesclando células'
 		processamento.save()
 		################
 		
-		xwws.range(mescla).merge()
-		xwws.range(mescla).api.VerticalAlignment = -4108
-		xwws.range(mescla).api.HorizontalAlignment = constants.xlCenter
-	
-	xwws.range(f"{gcl(prim_col)}:{gcl(col - 1)}").autofit()
+		index = 0
+		for mescla in mesclagem:
 
-	################ processamento
-	processamento.porcentagem = '100%'
-	processamento.mensagem1 = 'Concluído'
-	processamento.mensagem2 = ''
-	processamento.save()
-	################
-	
-	xwwb.save()
-	xwwb.close()
-	app.quit()
+			index += 1
+			################ processamento
+			processamento.porcentagem = f'{int((index+1)/len(mesclagem)*porcent)+20}%'
+			processamento.save()
+			################
+			
+			xwws.range(mescla).merge()
+			xwws.range(mescla).api.VerticalAlignment = -4108
+			xwws.range(mescla).api.HorizontalAlignment = constants.xlCenter
+		
+		xwws.range(f"{gcl(prim_col)}:{gcl(col - 1)}").autofit()
+
+		################ processamento
+		processamento.porcentagem = '100%'
+		processamento.mensagem1 = 'Concluído'
+		processamento.mensagem2 = ''
+		processamento.save()
+		################
+		
+		xwwb.save()
+		xwwb.close()
+		app.quit()
 
 	with open(caminho, "rb") as file:
 
