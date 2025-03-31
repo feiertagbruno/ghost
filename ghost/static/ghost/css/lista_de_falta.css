@@ -1,0 +1,55 @@
+.lista-de-falta-div {
+  width: 90vw;
+  margin: 0 auto;
+}
+
+.titulo-lista-de-falta {
+  width: 100%;
+  text-align: center;
+  margin: 1.3rem auto;
+  font-size: 2.8rem;
+}
+
+.form-lista-de-falta {
+  width: fit-content;
+  display: flex;
+  flex-flow: column;
+  margin: 0 auto;
+}
+
+.campo-lista-de-falta {
+  display: flex;
+  flex-flow: column;
+  padding: 0.5rem;
+}
+
+.codigo-lista-de-falta {
+  width: 20rem;
+}
+
+.linha-lista-de-falta {
+  display: flex;
+  flex-flow: row;
+  width: fit-content;
+  align-self: left;
+}
+
+.quant-lista-de-falta {
+  width: 11rem;
+}
+
+.ordem-lista-de-falta {
+  width: 5rem;
+  text-align: center;
+}
+
+.ordem-lista-de-falta label {
+  padding: 0.5rem 0;
+}
+
+.botao-mais-lista-de-falta {
+  font-size: 1.5rem;
+  margin: 1.3rem;
+  align-self: flex-end;
+  border-radius: 10px;
+}

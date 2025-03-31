@@ -1,0 +1,40 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static "ghost/css/lista_de_falta.css" %}">
+{% endblock css %}
+
+{% block content %}
+<div class="lista-de-falta-div">
+  <div class="titulo-lista-de-falta borda-dupla-inferior">Lista de Falta</div> 
+
+  <form class="form-lista-de-falta" action="{% url "ghost:lista-de-falta-post" %}" method="post">
+    {% csrf_token %}
+    <div class="linha-lista-de-falta ultima-linha-lista-de-falta">
+      <div class="campo-lista-de-falta ordem-lista-de-falta">
+        <label for="ordem-1">Ordem</label>
+        <input type="text" style="text-align: right;" name="ordem" id="ordem-1" value="1" readOnly>
+      </div>
+      <div class="campo-lista-de-falta codigo-lista-de-falta">
+        <label for="codigo-1">Código do Produto</label>
+        <input type="text" name="codigo" id="codigo-1">
+      </div>
+      <div class="campo-lista-de-falta quant-lista-de-falta">
+        <label for="quant-1">Quantidade</label>
+        <input type="number" name="quant" id="quant-1">
+      </div>
+      <div class="campo-lista-de-falta mes-lista-de-falta">
+        <label for="mes-1">Quantidade</label>
+        <input type="month" name="mes" id="mes-1">
+      </div>
+      <button class="botao-pequeno botao-mais-lista-de-falta" type="button">+</button>
+    </div>
+  </form>
+
+</div>
+{% endblock content %}
+
+{% block js %}
+<script src="{% static "ghost/js/lista_de_falta/listaDeFalta.js" %}"></script>
+{% endblock js %}

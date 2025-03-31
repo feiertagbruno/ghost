@@ -24,4 +24,6 @@ urlpatterns = [
     path("ghost/materiais/carregarestruturasphaseout/", views.carregar_estruturas_phase_out, name="carregar-estruturas-phase-out"), #simulador_de_producao.py
     path("ghost/materiais/carregarphaseout", views.carregar_phase_out, name="carregar-phase-out"), #simulador_de_producao.py
     path("ghost/materiais/gerarrelatoriophaseout/", views.relatorio_phaseout_por_produto), #simulador_de_producao.py
+    path("ghost/materiais/listadefalta", views.lista_de_falta, name="lista-de-falta"), #lista_e_falta.py
+    path("ghost/materiais/listadefaltapost", views.lista_de_falta_post, name="lista-de-falta-post"), #lista_e_falta.py
 ]
