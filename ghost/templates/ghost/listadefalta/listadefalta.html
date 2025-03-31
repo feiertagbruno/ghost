@@ -11,6 +11,7 @@
 
   <form class="form-lista-de-falta" action="{% url "ghost:lista-de-falta-post" %}" method="post">
     {% csrf_token %}
+    <input type="file" name="" id="fileInput">
     <div class="linha-lista-de-falta ultima-linha-lista-de-falta">
       <div class="campo-lista-de-falta ordem-lista-de-falta">
         <label for="ordem-1">Ordem</label>

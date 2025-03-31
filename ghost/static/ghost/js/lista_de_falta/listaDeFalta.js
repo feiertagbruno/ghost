@@ -39,3 +39,29 @@ function adicionar_nova_linha() {
   }
 
 }
+
+document.getElementById('fileInput').addEventListener('change', function(event) {
+  const file = event.target.files[0];
+  const reader = new FileReader();
+  const plan = []
+  
+  reader.onload = function(e) {
+      const text = e.target.result;
+      console.log(text); // Aqui você pode processar o CSV
+      const linhas = text.split("\r\n")
+      linhas.forEach(lin => {
+        const infos = lin.split(";")
+        console.log(infos)
+        if (infos[0]) {
+          const linha_plan = []
+          infos.forEach(info => {
+            linha_plan.push(info)
+          })
+          plan.push(linha_plan)
+        }
+      })
+      console.log(plan)
+  };
+  
+  reader.readAsText(file);
+});

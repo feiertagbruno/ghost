@@ -1,5 +1,3 @@
-a = null
+const a = ['']
 
-if (!a) {
-  console.log("ok")
-}
+if (a[0]) console.log("ok")
