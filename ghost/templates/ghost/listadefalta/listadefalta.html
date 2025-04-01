@@ -12,25 +12,31 @@
   <form class="form-lista-de-falta" action="{% url "ghost:lista-de-falta-post" %}" method="post">
     {% csrf_token %}
     <input type="file" name="" id="fileInput">
-    <div class="linha-lista-de-falta ultima-linha-lista-de-falta">
-      <div class="campo-lista-de-falta ordem-lista-de-falta">
-        <label for="ordem-1">Ordem</label>
-        <input type="text" style="text-align: right;" name="ordem" id="ordem-1" value="1" readOnly>
+    <div class="linhas-lista-de-falta">
+      <div class="labels-lista-de-falta">
+      <label for="ordem-1">Ordem</label>
+      <label for="codigo-1">Código do Produto</label>
+      <label for="quant-1">Quantidade</label>
+      <label for="mes-1">Mês</label>
       </div>
-      <div class="campo-lista-de-falta codigo-lista-de-falta">
-        <label for="codigo-1">Código do Produto</label>
-        <input type="text" name="codigo" id="codigo-1">
+
+      <div class="linha-lista-de-falta ultima-linha-lista-de-falta" draggable="true">
+        <div class="campo-lista-de-falta ordem-lista-de-falta">
+          <input type="text" style="text-align: right;" name="ordem" id="ordem-1" value="1" readOnly>
+        </div>
+        <div class="campo-lista-de-falta codigo-lista-de-falta">
+          <input type="text" name="codigo" id="codigo-1">
+        </div>
+        <div class="campo-lista-de-falta quant-lista-de-falta">
+          <input type="number" name="quant" id="quant-1">
+        </div>
+        <div class="campo-lista-de-falta mes-lista-de-falta">
+          <input type="month" name="mes" id="mes-1">
+        </div>
+        <button class="botao-pequeno botao-mais-lista-de-falta" type="button">+</button>
       </div>
-      <div class="campo-lista-de-falta quant-lista-de-falta">
-        <label for="quant-1">Quantidade</label>
-        <input type="number" name="quant" id="quant-1">
-      </div>
-      <div class="campo-lista-de-falta mes-lista-de-falta">
-        <label for="mes-1">Quantidade</label>
-        <input type="month" name="mes" id="mes-1">
-      </div>
-      <button class="botao-pequeno botao-mais-lista-de-falta" type="button">+</button>
     </div>
+    <button class="botao-padrao botao-gerar-lista-de-falta" id="botao-gerar-lista-de-falta" type="submit">Gerar Lista de Falta</button>
   </form>
 
 </div>
