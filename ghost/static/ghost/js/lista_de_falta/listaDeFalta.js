@@ -54,9 +54,6 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
   
   reader.onload = function(e) {
       const text = e.target.result;
-
-      console.log(text)
-      return
       
       const linhas = text.split("\r\n")
 
@@ -73,23 +70,35 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
         }
 
       })
-      console.log(plan)
       
       let contagem_ordem = 1
       const len_plan_0 = plan[0].length
       const len_plan = plan.length
-      for (let i = 2; i < len_plan_0; i++) {
-        for (let j = 1; j < len_plan; j++) {
-          if (plan[j][i] > 0) {
-            document.getElementById(`codigo-${contagem_ordem}`).value = plan[j][0]
-            document.getElementById(`quant-${contagem_ordem}`).value = plan[j][i]
-            const data = plan[0][i].split("/")
-            document.getElementById(`mes-${contagem_ordem}`).value = `${data[2]}-${data[1]}`
-            document.querySelector(".botao-mais-lista-de-falta").click()
-            contagem_ordem ++
+
+      if (len_plan_0 > 3) {
+        for (let i = 2; i < len_plan_0; i++) {
+          for (let j = 1; j < len_plan; j++) {
+            if (plan[j][i] > 0) {
+              document.getElementById(`codigo-${contagem_ordem}`).value = plan[j][0]
+              document.getElementById(`quant-${contagem_ordem}`).value = plan[j][i]
+              const data = plan[0][i].split("/")
+              document.getElementById(`mes-${contagem_ordem}`).value = `${data[2]}-${data[1]}`
+              document.querySelector(".botao-mais-lista-de-falta").click()
+              contagem_ordem ++
+            }
           }
         }
+      } else {
+        plan.forEach(linha => {
+          document.getElementById(`codigo-${contagem_ordem}`).value = linha[0]
+          document.getElementById(`quant-${contagem_ordem}`).value = linha[1]
+          const data = linha[2].split("/")
+          document.getElementById(`mes-${contagem_ordem}`).value = `${data[2]}-${data[1]}`
+          document.querySelector(".botao-mais-lista-de-falta").click()
+          contagem_ordem ++
+        })
       }
+
 
   };
   
