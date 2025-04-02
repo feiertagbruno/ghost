@@ -11,7 +11,7 @@
 
   <form class="form-lista-de-falta" action="{% url "ghost:lista-de-falta-post" %}" method="post">
     {% csrf_token %}
-    <input type="file" name="" id="fileInput">
+    <input type="file" name="" id="fileInput" accept=".csv">
     <div class="linhas-lista-de-falta">
       <div class="labels-lista-de-falta">
       <label for="ordem-1">Ordem</label>
@@ -19,6 +19,7 @@
       <label for="quant-1">Quantidade</label>
       <label for="mes-1">Mês</label>
       </div>
+      <div class="espaco-lista-de-falta"></div>
 
       <div class="linha-lista-de-falta ultima-linha-lista-de-falta" draggable="true">
         <div class="campo-lista-de-falta ordem-lista-de-falta">

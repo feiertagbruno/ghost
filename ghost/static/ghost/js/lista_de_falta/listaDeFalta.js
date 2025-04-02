@@ -4,10 +4,9 @@ const botao_mais = form.querySelector(".botao-mais-lista-de-falta")
 const linhas_lista_de_falta = document.querySelector(".linhas-lista-de-falta")
 let draggedItem = null
 
-console.dir(document.querySelector("label[for='quant-1']"))
-console.dir(document.querySelector("#quant-1"))
-document.querySelector("label[for='mes-1']").offsetLeft = document.querySelector("#mes-1").offsetLeft
-document.querySelector("label[for='quant-1']").offsetLeft = document.querySelector("#quant-1").offsetLeft
+document.querySelector("label[for='codigo-1']").style.left = `${document.querySelector("#codigo-1").offsetLeft}px`
+document.querySelector("label[for='mes-1']").style.left = `${document.querySelector("#mes-1").offsetLeft}px`
+document.querySelector("label[for='quant-1']").style.left = `${document.querySelector("#quant-1").offsetLeft}px`
 
 botao_mais.onclick = () => {
   adicionar_nova_linha()
@@ -55,6 +54,9 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
   
   reader.onload = function(e) {
       const text = e.target.result;
+
+      console.log(text)
+      return
       
       const linhas = text.split("\r\n")
 
@@ -120,3 +122,20 @@ linhas_lista_de_falta.addEventListener("dragover", e => {
 
   }
 })
+
+linhas_lista_de_falta.addEventListener("dragend", e => {
+  e.target.style.opacity = "1"
+  atualizarOrdem()
+})
+
+function atualizarOrdem() {
+  document.querySelectorAll(".linha-lista-de-falta").forEach((el, index) => {
+    const i = index + 1
+    el.querySelector("input[id*='ordem']").value = i
+    el.querySelector("input[id*='ordem']").id = `ordem-${i}`
+    el.querySelector("input[id*='codigo']").id = `codigo-${i}`
+    el.querySelector("input[id*='quant']").id = `quant-${i}`
+    el.querySelector("input[id*='mes']").id = `mes-${i}`
+    
+  });
+}

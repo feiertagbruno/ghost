@@ -58,22 +58,16 @@
   margin: 1rem 0;
 }
 
-.subir-descer {
-  align-self: flex-end;
-  padding: 0.5rem;
-  font-size: 1.7rem;
-}
-
-.subir-descer {
-  transform: scaleX(2);
-  cursor: pointer;
-}
-
 .labels-lista-de-falta {
   display: flex;
   background: red;
-  position: relative;
 }
+
 .labels-lista-de-falta label {
   position: absolute;
+}
+
+.espaco-lista-de-falta {
+  width: 1rem;
+  height: 2rem;
 }
