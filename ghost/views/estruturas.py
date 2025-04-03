@@ -35,6 +35,7 @@ def get_estrutura_produto(codigo, data_referencia, engine):
 
 
 def forma_string_codigos(codigos):
+	"""Variavel 'codigos' deve ser uma lista"""
 	str_codigos = ""
 	for cod in codigos:
 		str_codigos += f"{cod},"

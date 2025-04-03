@@ -1,5 +1,12 @@
-import pandas as pd
+a = {
+    "a": 1,
+    "b": 2,
+    "c": 3
+}
 
-b = pd.DataFrame({"abc":["a","b","c"]})
-for i in enumerate(b.columns):
-    print(i)
+c = a["a"]
+
+c += 1
+
+print(a)
+print(c)
