@@ -6,6 +6,7 @@
 	"python.testing.pytestArgs": [], // -x to bail
 	"python.defaultInterpreterPath": "venv/scripts",
 	"javascript.suggestionActions.enabled": true,
+	"emmet.triggerExpansionOnTab": true,
 	"editor.tabSize": 2,
 	"[python]": {
 		"editor.tabSize": 4,

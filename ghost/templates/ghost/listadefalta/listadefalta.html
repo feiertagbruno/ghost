@@ -11,7 +11,11 @@
 
   <form class="form-lista-de-falta" action="{% url "ghost:lista-de-falta-post" %}" method="post">
     {% csrf_token %}
-    <input type="file" name="" id="fileInput" accept=".csv">
+    <div class="no-wrap" style="padding-top: 0.5rem;">
+      <label for="desconta-prod-id">Descontar Produção do Mês Atual</label>
+      <input type="checkbox" name="desconta-prod" id="desconta-prod-id" checked>
+    </div>
+    <input type="file" name="" id="fileInput" accept=".csv" style="padding: 1rem 0;">
     <div class="linhas-lista-de-falta">
       <div class="labels-lista-de-falta">
       <label for="ordem-1">Ordem</label>

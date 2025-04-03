@@ -3,6 +3,8 @@ const form = document.querySelector(".form-lista-de-falta")
 const botao_mais = form.querySelector(".botao-mais-lista-de-falta")
 const linhas_lista_de_falta = document.querySelector(".linhas-lista-de-falta")
 let draggedItem = null
+const desconta_prod_ck = getCookie("desconta_prod")
+const desconta_prod_el = document.getElementById("desconta-prod-id")
 
 document.querySelector("label[for='codigo-1']").style.left = `${document.querySelector("#codigo-1").offsetLeft}px`
 document.querySelector("label[for='mes-1']").style.left = `${document.querySelector("#mes-1").offsetLeft}px`
@@ -147,4 +149,20 @@ function atualizarOrdem() {
     el.querySelector("input[id*='mes']").id = `mes-${i}`
     
   });
+}
+
+if (desconta_prod_ck) {
+  if (desconta_prod_ck === "true") {
+    desconta_prod_el.setAttribute("checked", true)
+  } else if (desconta_prod_ck === "false") {
+    desconta_prod_el.removeAttribute("checked")
+  }
+}
+
+desconta_prod_el.onchange = el => {
+  if (el.target.checked) {
+    document.cookie = "desconta_prod=true"
+  } else {
+    document.cookie = "desconta_prod=false"
+  }
 }
