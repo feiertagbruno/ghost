@@ -463,25 +463,18 @@ WHERE B2.D_E_L_E_T_ <> '*'
 	AND B2_COD IN ( SELECT value FROM string_split(@CODIGOS, ',') )
 """
 
-def get_query_estoque_atual_com_armazens():
+def get_query_estoque_armazens_somados():
 	return """
 DECLARE @CODIGOS VARCHAR(MAX) = :codigos ;
 DECLARE @ARMAZENS VARCHAR(MAX) = :armazens ;
 SELECT
 	TRIM(B2_COD) codigo,
-	TRIM(B1_DESC) descricao,
-	B1_TIPO tipo,
-	TRIM(B1_XORIMRP) origem,
-	B2_LOCAL armazem,
 	ISNULL(B2_QATU,0) quant,
-	B2_CM1 unitario
+	(SUM(B2_VATU1) / SUM(B2_QATU)) unitario
 FROM VW_MN_SB2 B2
-LEFT JOIN VW_MN_SB1 B1
-	ON B1.D_E_L_E_T_ <> '*'
-	AND B1_COD = B2_COD
 WHERE B2.D_E_L_E_T_ <> '*'
 	AND B2_QATU <> 0
-	AND B2_COD IN ( SELECT value FROM string_split(@CODIGOS, ',') )
+	AND (@CODIGOS IS NULL OR B2_COD IN ( SELECT value FROM string_split(@CODIGOS, ',') ))
 	AND B2_LOCAL IN ( SELECT value FROM string_split(@ARMAZENS, ',') )
 """
 

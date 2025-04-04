@@ -48,16 +48,19 @@ def lista_de_falta_post(request):
 
     if desconta_prod:
         demandas = desconta_producao_do_mes_atual(demandas, engine)
+    
+    # ESTOQUE
+    query_estoque
+    
+    for i in len(demandas["codigos"]):
+        codigo = demandas["codigos"][i]
+        quant = demandas["quant"][i]
+        data = demandas["datas"][i]
 
-    # ETAPAS DA VIEW
-    # 1. ESTRU Explodir as estruturas no dia 1 de cada mês (já tem as datas)
-    # 2. PRODUZIDOS Pegar os produzidos, se o usuário marcar para descontar a produção do mês atual
-    # 3. DEMANDA - PROD Diminuir os produzidos da demanda que está na variavel demanda
-    # 4. ESTOQUE
-    # 5. 
+        if quant > 0:
+            ...
+            # 
 
-    for produto, quant, data in demandas:
-        ...
 
 
     context = {
