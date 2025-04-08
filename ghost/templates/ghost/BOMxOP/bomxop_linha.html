@@ -1,0 +1,46 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block css %}
+	<link rel="stylesheet" href="{% static "ghost/css/bomxop_linha.css" %}">
+{% endblock css %}
+
+
+
+{% block content %}
+<div class="bomxop-linha-div">
+	<div class="titulo-form borda-dupla-inferior">BOM x OP Linha do Tempo</div>
+
+	<form action="{% url "ghost:bomxop-linha-do-tempo-post" %}" class="form-bomxop-linha">
+		{% csrf_token %}
+
+		<div class="flex-flow-row">
+			<label for="data-inicial-id">Data Inicial: </label>
+			<input class="data-bomxop-linha" type="date" name="data-inicial" id="data-inicial-id">
+
+			<label for="data-final-id">Data Final: </label>
+			<input class="data-bomxop-linha" type="date" name="data-final" id="data-final-id">
+
+		</div>
+
+		<div class="flex-flow-row linha-form">
+			<label for="traz-produzidos-id">Trazer todos os códigos produzidos no período digitado: </label>
+			<input type="checkbox" name="traz-produzidos" id="traz-produzidos-id">
+		</div>
+	
+		<div class="campo-codigos">
+			<label for="codigos-id">Carregar estruturas dos produtos correntes: </label>
+			<textarea class="codigos" name="codigos" id="codigos-produtos-id"></textarea>
+		</div>
+
+		<button class="botao-padrao botao-bomxop-linha" type="submit">Buscar</button>
+		
+	</form>
+
+</div>
+{% endblock content %}
+
+{% block js %}
+<script src="{% static "ghost/js/bomxop_linha/bomxop_linha.js" %}"></script>
+<script src="{% static "ghost/js/textareaDinamico.js" %}"></script>
+{% endblock js %}

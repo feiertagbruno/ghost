@@ -26,4 +26,6 @@ urlpatterns = [
     path("ghost/materiais/gerarrelatoriophaseout/", views.relatorio_phaseout_por_produto), #simulador_de_producao.py
     path("ghost/materiais/listadefalta", views.lista_de_falta, name="lista-de-falta"), #lista_e_falta.py
     path("ghost/materiais/listadefaltapost", views.lista_de_falta_post, name="lista-de-falta-post"), #lista_e_falta.py
+	path("ghost/bomxoplinha", views.bomxop_linha_do_tempo, name="bomxop-linha-do-tempo"), #bomxop_linha.py
+	path("ghost/bomxoplinhapost", views.bomxop_linha_do_tempo_post, name="bomxop-linha-do-tempo-post"), #bomxop_linha.py
 ]

@@ -1,0 +1,26 @@
+.bomxop-linha-div {
+	width: 90vw;
+	margin: 0 auto;
+}
+
+.form-bomxop-linha {
+	place-self: center;
+	padding: 1.5rem;
+	display: flex;
+	flex-flow: column;
+	gap: 1.5rem;
+}
+
+.campo-codigos {
+	display: flex;
+	flex-flow: column;
+}
+
+.codigos {
+	width: 40rem;
+}
+
+.botao-bomxop-linha {
+	place-self: center;
+	margin: 1rem;
+}
