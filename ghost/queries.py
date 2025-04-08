@@ -45,8 +45,14 @@ def get_query_alternativos():
 SELECT 
 	TRIM(GI_PRODORI) prodori,
 	TRIM(GI_PRODALT) alternativos,
-	TRIM(GI_ORDEM) ordem_alt
+	TRIM(GI_ORDEM) ordem_alt,
+	TRIM(B1_DESC) descricao_insumo,
+	B1_TIPO tipo_insumo,
+	TRIM(B1_XORIMRP) origem
 FROM VW_MN_SGI GI
+LEFT JOIN VW_MN_SB1 B1
+	ON B1.D_E_L_E_T_ <> '*'
+	AND B1_COD = GI_PRODALT
 WHERE GI.D_E_L_E_T_ <> '*'
 	AND GI_PRODORI IN (SELECT value FROM string_split(:codigos,','))
 ORDER BY GI_ORDEM DESC
@@ -469,8 +475,7 @@ DECLARE @CODIGOS VARCHAR(MAX) = :codigos ;
 DECLARE @ARMAZENS VARCHAR(MAX) = :armazens ;
 SELECT
 	TRIM(B2_COD) codigo,
-	ISNULL(B2_QATU,0) quant,
-	(SUM(B2_VATU1) / SUM(B2_QATU)) unitario
+	ISNULL(B2_QATU,0) quant
 FROM VW_MN_SB2 B2
 WHERE B2.D_E_L_E_T_ <> '*'
 	AND B2_QATU <> 0

@@ -84,7 +84,7 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
               document.getElementById(`codigo-${contagem_ordem}`).value = plan[j][0]
               document.getElementById(`quant-${contagem_ordem}`).value = plan[j][i]
               const data = plan[0][i].split("/")
-              document.getElementById(`mes-${contagem_ordem}`).value = `${data[2]}-${data[1]}`
+              document.getElementById(`mes-${contagem_ordem}`).value = `${data[2]}-${data[1]}-${data[0]}`
               document.querySelector(".botao-mais-lista-de-falta").click()
               contagem_ordem ++
             }
@@ -95,7 +95,7 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
           document.getElementById(`codigo-${contagem_ordem}`).value = linha[0]
           document.getElementById(`quant-${contagem_ordem}`).value = linha[1]
           const data = linha[2].split("/")
-          document.getElementById(`mes-${contagem_ordem}`).value = `${data[2]}-${data[1]}`
+          document.getElementById(`mes-${contagem_ordem}`).value = `${data[2]}-${data[1]}-${data[0]}`
           document.querySelector(".botao-mais-lista-de-falta").click()
           contagem_ordem ++
         })

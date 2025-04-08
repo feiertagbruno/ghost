@@ -98,7 +98,7 @@ def explode_estrutura(
 		data_referencia = None,
 		engine = None, 
 		abre_todos_os_PIs = True, 
-		solicitante: Literal["multiestruturas","simulador","phase_out"] = "multiestruturas"
+		solicitante: Literal["multiestruturas","simulador","phase_out","lista_de_falta"] = "multiestruturas"
 	):
 
 	data_referencia = tratamento_data_referencia(data_referencia)
@@ -151,7 +151,7 @@ def explode_estrutura(
 	
 	if solicitante == "multiestruturas":
 		estrutura, todos_os_codigos = acrescenta_alternativos(estrutura, engine, abre_todos_os_PIs)
-	elif solicitante in ["simulador","phase_out"]:
+	elif solicitante in ["simulador","phase_out","lista_de_falta"]:
 		estrutura, todos_os_codigos = acrescenta_alternativos_modelo_simulador(estrutura, engine)
 
 
@@ -819,5 +819,19 @@ def acrescenta_alternativos_modelo_simulador(estrutura: pd.DataFrame, engine):
 
 	todos_os_codigos = estrutura[["insumo"]].drop_duplicates(subset="insumo")\
 		.rename(columns={"insumo":"todos_os_codigos"})
+	
+	estrutura_merge = estrutura.merge(
+		estrutura,
+		how="left",
+		left_on="alternativo_de",
+		right_on="insumo",
+		suffixes=("", "_alt")
+	)
 
+	estrutura = estrutura.fillna({
+		"quant_utilizada": estrutura_merge["quant_utilizada_alt"],
+		"codigo_pai": estrutura_merge["codigo_pai_alt"],
+		"descricao_pai": estrutura_merge["descricao_pai_alt"],
+		"tipo_pai": estrutura_merge["tipo_pai_alt"]
+	})
 	return estrutura, todos_os_codigos
