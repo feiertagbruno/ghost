@@ -64,10 +64,14 @@ def lista_de_falta_post(request):
     
     # ESTOQUE
     query_estoque = get_query_estoque_armazens_somados()
-    estoque = pd.read_sql(text(query_estoque), engine, params={
+    estoque_original = pd.read_sql(text(query_estoque), engine, params={
         "codigos": None,
         "armazens": "11,14,17,20"
     })
+    estoque = estoque_original.copy(deep=True)
+
+    prim_lin = lin = 2
+    prim_col = col = 1
     
     for dem_i, dem_row in demandas.iterrows():
         codigo = dem_row["codigos"]
@@ -88,6 +92,35 @@ def lista_de_falta_post(request):
         for estru_i, estru_row in estrutura.iterrows():
 
             insumo = estru_row["insumo"]
+
+            ws.cell(lin,col,estru_row["codigo_original"])
+            col += 1
+
+            ws.cell(lin,col,estru_row["descricao_cod_original"])
+            col += 1
+
+            ws.cell(lin,col,estru_row["tipo_original"])
+            col += 1
+
+            ws.cell(lin,col,estru_row["codigo_pai"])
+            col += 1
+
+            ws.cell(lin,col,estru_row["descricao_pai"])
+            col += 1
+
+            ws.cell(lin,col,estru_row["tipo_pai"])
+            col += 1
+
+            ws.cell(lin,col,insumo)
+            col += 1
+
+            ws.cell(lin,col, estru_row["descricao_insumo"])
+            col += 1
+
+            ws.cell(lin,col,estru_row["tipo_insumo"])
+            col +=1
+
+            qtd_em_estoque = estoque_original.loc[estoque_original["insumo"] == insumo, "quant"]
 
 
         # 

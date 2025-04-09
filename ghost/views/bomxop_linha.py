@@ -57,26 +57,35 @@ def bomxop_linha_do_tempo_post(request):
 
 	detal_ops = DataFrame()
 
-	for _, row in ops.iterrows():
+	for i, row in ops.iterrows():
 		op = row["op"]
 		data = row["data_encerramento_op"]
 		request, df_op = explode_estrutura_pela_op(request, op, engine, data, True)
+		df_op["ordem"] = i + 1
 
 		detal_ops = concat([detal_ops,df_op], ignore_index=True)
 
 
-	def commodity(texto):
-		texto = str(texto).upper().strip()
+	def commodity(row):
+
+		if row["tipo_insumo"] == "EM":
+			return "EMBALAGEM"
+
+		texto = str(row["descricao_insumo"]).upper().strip()
 
 		if match(r"^MOTOR", texto):
 			return "MOTOR"
-		elif match(r"^(SACO|GIFT BOX|NECESSAIRE|CLOTH BAG|ETIQUETA|MASTER BOX|MANUAL)", texto) :
-			return "EMBALAGEM"
+		elif match(r"^(PA66|PA 66)", texto):
+			return "INJEÇÃO"
+		elif match(r"^(TINTA )",texto):
+			return "PINTURA"
+		elif match(r"(PC HS|PC HD)", texto):
+			return "CABO DE FORÇA"
+		else:
+			return ""
 
-		
-		return ""
-	
-	detal_ops["commodity"] = detal_ops["descricao_insumo"].apply(commodity)
+
+	detal_ops["commodity"] = detal_ops.apply(commodity,axis=1)
 
 	cabecalhos, rows = get_cabecalhos_e_rows_dataframe(detal_ops)
 
