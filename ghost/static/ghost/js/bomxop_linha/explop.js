@@ -1,0 +1,1 @@
+document.getElementById("data-id").value = getTodayDate()

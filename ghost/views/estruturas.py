@@ -123,8 +123,11 @@ def explode_estrutura(
 	#enquanto tiver PI continua executando a consulta no banco
 	while tem_PI:
 		
-		for codigo_PI in filtro_PI["insumo"]:
+		for _, row in filtro_PI.iterrows():
+			codigo_PI = row["insumo"]
+			quant_utilizada = row["quant_utilizada"]
 			resultado = get_estrutura_produto(codigo_PI, data_referencia, engine)
+			resultado["quant_utilizada"] = resultado["quant_utilizada"] * quant_utilizada
 			estrutura.loc[estrutura["insumo"] == codigo_PI, "verificado"] = True
 			estrutura = pd.concat([estrutura,resultado],ignore_index=True)
 

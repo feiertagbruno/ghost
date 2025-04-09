@@ -28,4 +28,6 @@ urlpatterns = [
     path("ghost/materiais/listadefaltapost", views.lista_de_falta_post, name="lista-de-falta-post"), #lista_e_falta.py
 	path("ghost/bomxoplinha", views.bomxop_linha_do_tempo, name="bomxop-linha-do-tempo"), #bomxop_linha.py
 	path("ghost/bomxoplinhapost", views.bomxop_linha_do_tempo_post, name="bomxop-linha-do-tempo-post"), #bomxop_linha.py
+	path("ghost/explop", views.explop, name="explop"), # explop.py
+	path("ghost/exploppost", views.explop_post, name="explop-post"), # explop.py
 ]

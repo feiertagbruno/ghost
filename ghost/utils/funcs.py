@@ -99,3 +99,33 @@ def rgb_para_long(rgb):
 
 def rgb_para_hex(r, g, b):
     return "{:02x}{:02x}{:02x}".format(r, g, b)
+
+
+
+
+def forma_string_para_query(lista):
+	"""Variavel 'lista' deve ser uma lista, caso não tenha ficado claro o nome"""
+	string = ""
+	for l in lista:
+		string += f"{l},"
+	return string.rstrip(",")
+
+
+
+
+def get_cabecalhos_e_rows_dataframe(
+		df:pd.DataFrame, reduz_campos:bool = True
+):
+
+	cabecalhos = []
+	for col in df.columns:
+		cabecalhos.append(col)
+
+
+	rows = []
+	for i, row in df.iterrows():
+		row_data = row.to_dict()
+		rows.append(row_data)
+
+
+	return cabecalhos, rows

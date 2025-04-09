@@ -913,38 +913,6 @@ def phase_out(request):
 
 
 
-def get_cabecalhos_e_rows_dataframe(
-		df:pd.DataFrame, reduz_campos:bool = True
-):
-
-	cabecalhos = []
-	cabecalhos_anteriores = []
-	size = len(df.columns[0].split("xxx"))
-	for i in range(size):
-		cabecalhos.append([])
-		cabecalhos_anteriores.append([])
-
-	for col in df.columns:
-		for i,subcol in enumerate(col.split("xxx")):
-			if subcol == cabecalhos_anteriores[i]:
-				cabecalhos[i][-1][subcol] = (cabecalhos[i][-1][subcol][0] + 1, col)
-			else:
-				cabecalhos[i].append({subcol:(1,col)})
-			cabecalhos_anteriores[i] = subcol
-
-
-	rows = []
-	for i, row in df.iterrows():
-		row_data = row.to_dict()
-		row_data["index"] = i
-		rows.append(row_data)
-
-
-	return cabecalhos, rows
-
-
-
-
 def get_cabecalhos_e_rows_phaseout(
 		df:pd.DataFrame, cols, reduz_campos:bool = True
 ):

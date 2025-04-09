@@ -176,7 +176,7 @@ li {
 .linha-vertical {
 	width: 0.5rem;
 	background: linear-gradient(to right, rgba(255,255,255,0), rgba(78, 78, 78, 0.82));
-	height: 50vh;
+	height: 60vh;
 }
 
 .aplicacoes-items {
@@ -236,4 +236,20 @@ li {
 
 .form-bomxop {
 	width: 50vw;
+}
+
+.div-conteudo-padrao {
+	width: 90vw;
+	margin: 0 auto;
+}
+ 
+.box-tabela-comum {
+	max-width: 90%;
+	height: 90vh;
+	overflow: auto;
+	margin: 1rem auto;
+	border: solid 3px gray;
+	border-radius: 10px;
+	padding: 0.5rem;
+	margin-bottom: 3vh;
 }

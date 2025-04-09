@@ -1,0 +1,30 @@
+{% load static %}
+{% load custom_filters %}
+
+<div class="box-tabela-comum">
+<table class="tabela-simulador" id="tabela-simulador-id">
+	<thead class="cabecalho-tabela">
+
+		<tr>
+			{% for cab in cabecalhos %}
+				<th>
+					{{cab}}
+				</th>
+			{% endfor %}
+		</tr>
+
+
+	</thead>
+	<tbody>
+		{% for row in rows %}
+			<tr>
+				{% for col, value in row.items %}
+					<td>
+						{{value}}
+					</td>
+				{% endfor %}
+			</tr>
+		{% endfor %}
+	</tbody>
+</table>
+</div>

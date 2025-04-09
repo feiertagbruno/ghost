@@ -1,0 +1,20 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block css %}
+	<link rel="stylesheet" href="{% static "ghost/css/bomxop_linha.css" %}">
+{% endblock css %}
+
+
+
+{% block content %}
+<div class="bomxop-linha-div">
+	<div class="titulo-form borda-dupla-inferior">BOM x OP Linha do Tempo</div>
+
+	{% include "ghost/comuns/tabela_comum.html" %}
+
+</div>
+{% endblock content %}
+
+{% block js %}
+{% endblock js %}

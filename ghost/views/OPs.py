@@ -629,6 +629,7 @@ def get_numeros_OPs_por_periodo(data_inicial, data_final, engine = None):
 	resultado = pd.read_sql(text(query), engine, params={
 		"data_inicial": data_inicial,
 		"data_final": data_final,
+		"codigos": None
 	})
 
 	return resultado["op"].to_list()

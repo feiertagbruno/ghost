@@ -11,7 +11,7 @@
 <div class="bomxop-linha-div">
 	<div class="titulo-form borda-dupla-inferior">BOM x OP Linha do Tempo</div>
 
-	<form action="{% url "ghost:bomxop-linha-do-tempo-post" %}" class="form-bomxop-linha">
+	<form action="{% url "ghost:bomxop-linha-do-tempo-post" %}" class="form-bomxop-linha" method="post">
 		{% csrf_token %}
 
 		<div class="flex-flow-row">

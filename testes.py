@@ -1,12 +1,9 @@
-a = {
-    "a": 1,
-    "b": 2,
-    "c": 3
-}
+from pandas import DataFrame
 
-c = a["a"]
+a = DataFrame({"a":[1,2,3,4,5],"b":[1,1,1,2,2]})
 
-c += 1
+b = a.loc[a["b"] == 2,:]
+for i, val in b.iterrows():
+	a.at[i,"a"] = 6
 
 print(a)
-print(c)

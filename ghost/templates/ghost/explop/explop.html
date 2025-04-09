@@ -1,0 +1,43 @@
+{% extends "ghost/estru.html" %}
+{% load static %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static "ghost/css/explop.css" %}">
+{% endblock css %}
+
+{% block content %}
+<div class="div-conteudo-padrao">
+	<div class="titulo-form borda-dupla-inferior">EXPLOP - Explosão de PI/PA usando OPs</div>
+
+	{% if caller == "explop" %}
+	<form class="form-explop" action="{% url "ghost:explop-post" %}" method="post">
+		{% csrf_token %}
+		<div class="flex-flow-row">
+			<label for="codigo-id">Código: </label>
+			<input type="text" name="codigo" id="codigo-id" maxlength="15">
+		</div>
+
+		<div class="flex-flow-row linha-form">
+			<label for="explodir-pis-id">Explodir PIs: </label>
+			<input type="checkbox" name="explodir-pis" id="explodir-pis-id" checked>
+		</div>
+			
+		<div class="flex-flow-row">
+			<label for="data-id">Data de Referência: </label>
+			<input type="date" name="data" id="data-id" maxlength="15">
+		</div>
+		<button class="botao-padrao" type="submit">Buscar</button>
+	</form>
+	{% endif %}
+
+	{% if caller == "explop_post" %}
+	{% include "ghost/comuns/tabela_comum.html" %}
+	{% endif %}
+
+</div>
+{% endblock content %}
+
+
+{% block js %}
+<script src="{% static "ghost/js/bomxop_linha/explop.js" %}"></script>
+{% endblock js %}
