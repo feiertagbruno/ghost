@@ -1,5 +1,6 @@
 {% extends "ghost/estru.html" %}
 {% load static %}
+{% load custom_filters %}
 
 {% block css %}
 	<link rel="stylesheet" href="{% static "ghost/css/bomxop_linha.css" %}">
@@ -11,10 +12,40 @@
 <div class="bomxop-linha-div">
 	<div class="titulo-form borda-dupla-inferior">BOM x OP Linha do Tempo</div>
 
-	{% include "ghost/comuns/tabela_comum.html" %}
+	<div class="bomxop-linha-content-div">
+	{% for sku, sku_val in dicio_tela.items %}
+	<div class="sku-div">
+		
+		<div class="sku-titulo">{{sku}}</div>
+			{% for commod, commod_val in sku_val.items %}
+				{% with sku|add:"|"|add:commod as chave %}
+							<div class="commod-div">
+								<div class="commod-titulo" id="{{sku}}-{{commod}}">{{commod}}</div>
+
+								{% for cc,vv in colunas_somadas_resumo|get_colunas_somadas_resumo:chave%}
+								<div class="coluna-resumo-bomxop-linha">
+									<div>{{cc|safe}}</div>
+									<div>{{vv}}</div>
+								</div>
+								{% endfor %}
+
+						</div>
+						{% for cabecalhos, colunas_somadas, rows in commod_val %}
+						<div id="tabela-{{sku}}-{{commod}}" class="tabela-boxmop-linha-div hidden">
+							{% include "ghost/BOMxOP/bomxop_tabela.html" %}
+						</div>
+						{% endfor %}
+					{% endwith %}
+			{% endfor %}
+
+		</div>
+	{% endfor %}
+</div>
+
 
 </div>
 {% endblock content %}
 
 {% block js %}
+<script src="{% static "ghost/js/bomxop_linha/bomxop_linha_post.js" %}"></script>
 {% endblock js %}

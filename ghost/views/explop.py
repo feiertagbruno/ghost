@@ -78,6 +78,7 @@ def explode_estrutura_pela_op(request, op, engine, data, explodir_pis: bool):
 		while tem_pi:
 			for i, row in filtro_pis.iterrows():
 				cod_pi = row["insumo"]
+				quant = row["quant_utilizada"]
 				data_referencia = tratamento_data_referencia(row["data_encerramento_op"])
 				ult_op = read_sql(query_ult_op, engine, params={
 					"data_referencia": data_referencia,
@@ -88,6 +89,7 @@ def explode_estrutura_pela_op(request, op, engine, data, explodir_pis: bool):
 					continue
 				op = ult_op["op"].iloc[0]
 				detal_op = read_sql(query_detal, engine, params={"numero_op": op})
+				detal_op["quant_utilizada"] = detal_op["quant_utilizada"] * quant
 				detal_ops.at[i,"verificado"] = True
 				detal_ops = concat([detal_ops,detal_op],ignore_index=True).reset_index(drop=True)
 

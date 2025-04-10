@@ -1,9 +1,6 @@
-from pandas import DataFrame
+import re
 
-a = DataFrame({"a":[1,2,3,4,5],"b":[1,1,1,2,2]})
+texto = " ACABOu BLABLA INJA "
 
-b = a.loc[a["b"] == 2,:]
-for i, val in b.iterrows():
-	a.at[i,"a"] = 6
-
-print(a)
+for j in re.search(r"(HOUSING|(?:^| )INJ(?:$| ))", texto).groups():
+	print(j)

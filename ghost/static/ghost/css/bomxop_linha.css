@@ -24,3 +24,50 @@
 	place-self: center;
 	margin: 1rem;
 }
+ 
+.box-tabela-bomxop {
+	max-width: 90%;
+	height: fit-content;
+	overflow: auto;
+	margin: 1rem auto;
+	border: solid 3px gray;
+	border-radius: 10px;
+	padding: 0.5rem;
+	margin-bottom: 3vh;
+}
+
+.col-resumo-bomxop-linha {
+	justify-content: space-between;
+}
+
+.sku-titulo {
+	width: 20rem;
+	border-bottom: 2px solid dimgray;
+}
+
+.sku-div {
+	padding: 0.5rem;
+	border: 2px solid dimgray;
+	border-radius: 10px;
+	max-width: 90%;
+	margin: 1rem auto;
+
+}
+
+.commod-div {
+	align-items: top;
+	gap: 2rem;
+	display: flex;
+	flex-flow: row;
+}
+
+.commod-titulo {
+	place-self: top;
+	min-width: 20rem;
+	cursor: pointer;
+}
+
+.coluna-resumo-bomxop-linha {
+	padding-bottom: 0.5rem;
+	border-top: 2px dashed lightgray;
+}

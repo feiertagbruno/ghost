@@ -16,3 +16,8 @@ def get_attr(obj, attr):
     if isinstance(obj, dict):
         return obj.get(attr, "")
     return getattr(obj, attr, "")
+
+@register.filter
+def get_colunas_somadas_resumo(dicionario, args):
+    ch1, ch2 = args.split("|")
+    return dicionario[ch1][ch2]
