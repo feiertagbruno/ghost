@@ -241,7 +241,7 @@ WITH CONSULTA_OP AS (
 		TRIM(D4_COD) insumo,
 		TRIM(B1.B1_DESC) descricao_insumo,
 		TRIM(B1.B1_TIPO) tipo_insumo,
-		ROUND((D4_QTDEORI / C2_QUANT),5) quant_utilizada,
+		ROUND((D4_QTDEORI / C2_QUANT),8) quant_utilizada,
 		C2_QUJE quant_produzida, 
 		D4_QTDEORI - D4_QUANT quant_total_utilizada
 	

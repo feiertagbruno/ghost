@@ -21,3 +21,8 @@ def get_attr(obj, attr):
 def get_colunas_somadas_resumo(dicionario, args):
     ch1, ch2 = args.split("|")
     return dicionario[ch1][ch2]
+
+@register.filter
+def replace(value, args):
+    old, new = args.split(',')
+    return value.replace(old, new)

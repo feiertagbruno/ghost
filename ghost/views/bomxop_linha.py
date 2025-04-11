@@ -1,15 +1,16 @@
 from django.shortcuts import render
 from django.contrib import messages
 
-from pandas import read_sql, DataFrame, concat
+from pandas import read_sql, DataFrame, concat, read_excel
 from sqlalchemy import text
 from re import search
+from datetime import date
 
 from ghost.utils.funcs import tratamento_data_referencia, forma_string_para_query, get_cabecalhos_e_rows_dataframe
 from ghost.queries import (
-	get_query_numeros_op_por_periodo_somente_PA
+	get_query_numeros_op_varios_periodos_somente_PA
 )
-from ghost.utils.funcs import get_engine
+from ghost.utils.funcs import get_engine, get_info_produtos
 from ghost.views.explop import explode_estrutura_pela_op
 
 def bomxop_linha_do_tempo(request):
@@ -20,15 +21,29 @@ def bomxop_linha_do_tempo_post(request):
 	if request.method != "POST":
 		return render(request, "ghost/BOMxOP/bomxop_linha.html")
 
-	data_inicial = request.POST.get("data-inicial")
-	data_final = request.POST.get("data-final")
-	if not data_inicial or not data_final:
+	qual_custo = request.POST.get("qual-custo")
+
+	datas_iniciais_str = request.POST.getlist("data-inicial")
+	datas_iniciais = []
+	datas_finais_str = request.POST.getlist("data-final")
+	datas_finais = []
+	if len(datas_iniciais_str) == 0 or len(datas_finais_str) == 0:
 		messages.info(request, "Datas Inválidas")
 		return render(request, "ghost/BOMxOP/bomxop_linha.html")
 	
-	data_inicial = tratamento_data_referencia(data_inicial)
-	data_final = tratamento_data_referencia(data_final)
+	for data_inicial in datas_iniciais_str:
+		if data_inicial:
+			data_inicial = tratamento_data_referencia(data_inicial)
+			datas_iniciais.append(data_inicial)
+	for data_final in datas_finais_str:
+		if data_final:
+			data_final = tratamento_data_referencia(data_final)
+			datas_finais.append(data_final)
 
+	if len(datas_iniciais) != len(datas_finais):
+		messages.info(request, "Erro no processamento das datas digitadas")
+		return render(request, "ghost/BOMxOP/bomxop_linha.html")
+	
 	traz_prod = request.POST.get("traz-produzidos")
 	
 	if traz_prod != "on":
@@ -43,10 +58,30 @@ def bomxop_linha_do_tempo_post(request):
 	
 	engine = get_engine()
 
-	query_ops = get_query_numeros_op_por_periodo_somente_PA()
+	traz_budget = True if request.POST.get("traz-budget") == "on" else False
+	
+	if traz_budget:
+		budget = read_excel("budget25.xlsx",sheet_name="detal_std")
+
+		info_prod = get_info_produtos(forma_string_para_query(budget["codigo_original"].drop_duplicates()), engine)
+		budget = budget.merge(info_prod,how="left",left_on="codigo_original",right_on="codigo").drop(columns=["origem_produto","codigo"])\
+			.rename(columns={"descricao_produto":"descricao_cod_original","tipo_produto":"tipo_original"})
+
+		info_prod = get_info_produtos(forma_string_para_query(budget["codigo_pai"].drop_duplicates()), engine)
+		budget = budget.merge(info_prod,how="left",left_on="codigo_pai",right_on="codigo").drop(columns=["origem_produto","codigo"])\
+			.rename(columns={"descricao_produto":"descricao_pai","tipo_produto":"tipo_pai"})
+		
+		info_prod = get_info_produtos(forma_string_para_query(budget["insumo"].drop_duplicates()),engine)
+		budget = budget.merge(info_prod,how="left",left_on="insumo",right_on="codigo").drop(columns=["origem_produto","codigo"])\
+			.rename(columns={"descricao_produto":"descricao_insumo","tipo_produto":"tipo_insumo"})
+
+		budget["op_original"] = "00000000000"
+		budget["data_encerramento_op_original"] = date(2024,10,19)
+
+		
+
+	query_ops = get_query_numeros_op_varios_periodos_somente_PA(datas_iniciais, datas_finais)
 	ops = read_sql(text(query_ops), engine, params={
-		"data_inicial": data_inicial,
-		"data_final": data_final,
 		"codigos": codigos,
 		"tipos_apontamento": '200'
 	})
@@ -77,7 +112,13 @@ def bomxop_linha_do_tempo_post(request):
 		detal_ops = concat([detal_ops,df_op], ignore_index=True)
 	
 	detal_ops = detal_ops.drop(columns=["quant_total_utilizada"])
+	# premissa não precisa
+	# detal_ops["ult_compra_custo_utilizado"] = round(detal_ops["ult_compra_custo_utilizado"] + (detal_ops["ult_compra_custo_utilizado"] * 0.1),5)
 
+
+	if traz_budget:
+		budget = budget.loc[budget["codigo_original"].isin(ops["produto"]),:]
+		detal_ops = concat([budget,detal_ops])
 
 	def commodity(row):
 
@@ -90,7 +131,7 @@ def bomxop_linha_do_tempo_post(request):
 			elif search(r"(?:^| )(CONTACT SET|CHAPA CONTATO|CONTACT PLATE|SENSOR ELEG)(?:$| )",descri_pai):
 				return "PATIN"
 			elif search(r"(?:^| )(GRID|FILTER|GRADE)(?:$| )", descri_pai):
-				return "TAMPOGRAFIA"
+				return "ESTAMPARIA"
 			elif search(r"(?:^| )(PCB[A]?)(?:$| )", descri_pai):
 				return "PLACA"
 
@@ -110,7 +151,7 @@ def bomxop_linha_do_tempo_post(request):
 		elif search(r"^(PA[ ]?66|PC |MASTER PC)", texto):
 			return "INJECAO"
 		elif search(r"(^TINTA |TAMPOGRAFIA| TAMPO |CATALI[ZS]ADOR)",texto):
-			return "PINTURA/TAMPOGRAFIA"
+			return "TAMPOG E PINTURA"
 		elif search(r"(?:^| )(MICA|RIVET)(?:$| )", texto):
 			return "CALEFATOR"
 		elif search(r"(ALUMIN[I]?UM PLATE|T[H]?ERMISTOR PTC)", texto):
@@ -137,26 +178,14 @@ def bomxop_linha_do_tempo_post(request):
 	detal_ops["commodity"] = detal_ops.apply(commodity,axis=1)
 	detal_ops = detal_ops.rename(columns={"ult_compra_custo_utilizado":"ult_compra_sem_frete"})
 	
-	# detal_ops = detal_ops.pivot_table(
-	# 	values=["ult_compra_sem_frete"],
-	# 	index=["codigo_original","descricao_cod_original","tipo_original",
-	# 	 "commodity","insumo","descricao_insumo","tipo_insumo"],
-	# 	columns=["op_original","data_encerramento_op_original"]
-	# ).reset_index()
-
-	# detal_ops.columns = detal_ops.columns.map(lambda x: '<br>'.join(str(i) for i in x))
-
-	# try:
-	# 	detal_ops.to_excel("b.xlsx")
-	# except:
-	# 	print("não imprimiu o detal_ops")
 
 	dicio_tela = {}
 	colunas_somadas_resumo = {}
 	for prod in detal_ops["codigo_original"].drop_duplicates():
 		dicio_tela.update({prod:{}})
 		colunas_somadas_resumo.update({prod:{}})
-		for commod in detal_ops.loc[detal_ops["codigo_original"] == prod,"commodity"]:
+		soma_por_coluna = {}
+		for commod in detal_ops.loc[detal_ops["codigo_original"] == prod,"commodity"].drop_duplicates():
 			dicio_tela[prod].update({commod:[]})
 			colunas_somadas_resumo[prod].update({commod:[]})
 
@@ -172,21 +201,40 @@ def bomxop_linha_do_tempo_post(request):
 
 			temp_df.columns = temp_df.columns.map(lambda x: '<br>'.join(str(i) for i in x))
 
-			cabecalhos, rows = get_cabecalhos_e_rows_dataframe(temp_df)
+			temp_df = temp_df.drop(columns=["codigo_original<br><br>","descricao_cod_original<br><br>","tipo_original<br><br>"])
 
 			colunas_somadas = []
 			for col in temp_df.columns:
 				if "ult_compra_sem_frete" in col:
 					soma = round(temp_df[col].sum(),5)
+					temp_df[col] = round(temp_df[col],5)
 					colunas_somadas.append(soma)
 					colunas_somadas_resumo[prod][commod].append((col.split("<br>")[2],soma))
+
+					if col not in soma_por_coluna:
+						soma_por_coluna.update({col:soma})
+					else:
+						soma_por_coluna[col] += soma
+
 				else:
 					colunas_somadas.append("")
+
+			cabecalhos, rows = get_cabecalhos_e_rows_dataframe(temp_df)
+				
 			dicio_tela[prod][commod].append([
 				cabecalhos,
 				colunas_somadas,
 				rows
 			])
+
+		colunas_somadas_resumo[prod].update({"TOTAL":[]})
+		for key,val in soma_por_coluna.items():
+			colunas_somadas_resumo[prod]["TOTAL"].append((key.split("<br>")[2],round(val,5)))
+
+	try:
+		detal_ops.to_excel("b.xlsx")
+	except:
+		print("não imprimiu o detal_ops")
 
 	cabecalhos, rows = get_cabecalhos_e_rows_dataframe(detal_ops)
 

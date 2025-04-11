@@ -1,6 +1,6 @@
-import re
+a = {
+	"a":1
+}
 
-texto = " ACABOu BLABLA INJA "
-
-for j in re.search(r"(HOUSING|(?:^| )INJ(?:$| ))", texto).groups():
-	print(j)
+for key,val in a.items():
+	print(key,val)

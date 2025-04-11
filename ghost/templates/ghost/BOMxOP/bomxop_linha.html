@@ -9,27 +9,46 @@
 
 {% block content %}
 <div class="bomxop-linha-div">
-	<div class="titulo-form borda-dupla-inferior">BOM x OP Linha do Tempo</div>
+	<div class="titulo-form borda-dupla-inferior">OPs em Linha do Tempo</div>
 
 	<form action="{% url "ghost:bomxop-linha-do-tempo-post" %}" class="form-bomxop-linha" method="post">
 		{% csrf_token %}
 
-		<div class="flex-flow-row">
-			<label for="data-inicial-id">Data Inicial: </label>
-			<input class="data-bomxop-linha" type="date" name="data-inicial" id="data-inicial-id">
+		<div class="flex-flow-row ultima-div-data">
+			<label for="data-inicial-1">Data Inicial: </label>
+			<input class="data-bomxop-linha" type="date" name="data-inicial" id="data-inicial-1">
 
-			<label for="data-final-id">Data Final: </label>
-			<input class="data-bomxop-linha" type="date" name="data-final" id="data-final-id">
+			<label for="data-final-1">Data Final: </label>
+			<input class="data-bomxop-linha" type="date" name="data-final" id="data-final-1">
 
+			<button class="botao-pequeno botao-mais">+</button>
+
+		</div>
+
+		<div class="flex-flow-row linha-form">
+			<label for="traz-budget-id">Tazer Budget: </label>
+			<input type="checkbox" name="traz-budget" id="traz-budget-id" checked>
 		</div>
 
 		<div class="flex-flow-row linha-form">
 			<label for="traz-produzidos-id">Trazer todos os SKUs produzidos no período digitado: </label>
 			<input type="checkbox" name="traz-produzidos" id="traz-produzidos-id">
 		</div>
+
+		<div class="flex-flow-row linha-form">
+			<label>
+				<input type="radio" name="qual-custo" value="uesf" checked> Última entrada bruto (sem frete)
+			</label>
+			<label>
+				<input type="radio" name="qual-custo" value="uecf"> Custo última entrada (com frete)
+			</label>
+			<label>
+				<input type="radio" name="qual-custo" value="uf"> Último fechamento
+			</label>
+		</div>
 	
 		<div class="campo-codigos">
-			<label for="codigos-id">Carregar estruturas dos produtos correntes: </label>
+			<label for="codigos-produtos-id">Carregar estruturas dos produtos correntes: </label>
 			<textarea class="codigos" name="codigos" id="codigos-produtos-id"></textarea>
 		</div>
 

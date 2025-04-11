@@ -10,33 +10,63 @@
 
 {% block content %}
 <div class="bomxop-linha-div">
-	<div class="titulo-form borda-dupla-inferior">BOM x OP Linha do Tempo</div>
+	<div class="titulo-form borda-dupla-inferior">OPs em Linha do Tempo</div>
 
 	<div class="bomxop-linha-content-div">
 	{% for sku, sku_val in dicio_tela.items %}
 	<div class="sku-div">
 		
-		<div class="sku-titulo">{{sku}}</div>
+		<div class="sku-titulo" id="pa-{{sku}}">{{sku}}</div>
+
 			{% for commod, commod_val in sku_val.items %}
 				{% with sku|add:"|"|add:commod as chave %}
-							<div class="commod-div">
-								<div class="commod-titulo" id="{{sku}}-{{commod}}">{{commod}}</div>
 
-								{% for cc,vv in colunas_somadas_resumo|get_colunas_somadas_resumo:chave%}
-								<div class="coluna-resumo-bomxop-linha">
-									<div>{{cc|safe}}</div>
-									<div>{{vv}}</div>
-								</div>
-								{% endfor %}
-
+					<div class="commod-div">
+						<div 
+							class="commod-titulo dados-pa-{{sku}} hidden" 
+							id="{{sku}}-{{commod|replace:' ,_'}}"
+						>
+							{{commod}}
 						</div>
-						{% for cabecalhos, colunas_somadas, rows in commod_val %}
-						<div id="tabela-{{sku}}-{{commod}}" class="tabela-boxmop-linha-div hidden">
-							{% include "ghost/BOMxOP/bomxop_tabela.html" %}
+
+						{% for cc,vv in colunas_somadas_resumo|get_colunas_somadas_resumo:chave%}
+						<div class="coluna-resumo-bomxop-linha dados-pa-{{sku}} hidden">
+							<div>{{cc|safe}}</div>
+							<div>{{vv}}</div>
 						</div>
 						{% endfor %}
-					{% endwith %}
+					</div>
+
+					{% for cabecalhos, colunas_somadas, rows in commod_val %}
+					<div id="tabela-{{sku}}-{{commod|replace:' ,_'}}" class="tabela-boxmop-linha-div hidden">
+						{% include "ghost/BOMxOP/bomxop_tabela.html" %}
+					</div>
+					{% endfor %}
+
+				{% endwith %}
 			{% endfor %}
+
+			<div class="commod-div">
+				<div 
+					class="commod-titulo-total" 
+					style="font-weight: bold;"
+					id="{{sku}}-TOTAL"
+				>
+					TOTAL
+				</div>
+
+				{% with sku|add:"|TOTAL" as chave %}
+				{% for cc,vv in colunas_somadas_resumo|get_colunas_somadas_resumo:chave%}
+				<div class="coluna-resumo-total">
+					<div style="font-weight: bold;">{{cc|safe}}</div>
+					<div style="font-weight: bold;">{{vv}}</div>
+				</div>
+				{% endfor %}
+				{% endwith %}
+			</div>
+			{% comment %} <div id="tabela-{{sku}}-TOTAL" class="tabela-boxmop-linha-div hidden">
+				{% include "ghost/BOMxOP/bomxop_tabela.html" %}
+			</div> {% endcomment %}
 
 		</div>
 	{% endfor %}
