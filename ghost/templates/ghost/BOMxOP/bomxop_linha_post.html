@@ -10,35 +10,41 @@
 
 {% block content %}
 <div class="bomxop-linha-div">
-	<div class="titulo-form borda-dupla-inferior">OPs em Linha do Tempo</div>
+	<div class="titulo-form borda-dupla-inferior titulo-bomxop-linha">OPs em Linha do Tempo
+		<form class="form-relatorio-bomxop-linha" action="{% url "ghost:baixar-relatorio-bomxop-linha" %}" method="post">
+			{% csrf_token %}
+			<input type="hidden" name="caminho-arquivo" value="{{caminho_arquivo}}">
+			<button class="botao-pequeno" type="submit">Baixar relatório em Excel</button>
+		</form>	
+	</div>
 
 	<div class="bomxop-linha-content-div">
 	{% for sku, sku_val in dicio_tela.items %}
 	<div class="sku-div">
 		
-		<div class="sku-titulo" id="pa-{{sku}}">{{sku}}</div>
+		<div class="sku-titulo" id="pa-{{sku|replace:' ,_'}}">{{sku}}</div>
 
 			{% for commod, commod_val in sku_val.items %}
 				{% with sku|add:"|"|add:commod as chave %}
 
 					<div class="commod-div">
 						<div 
-							class="commod-titulo dados-pa-{{sku}} hidden" 
-							id="{{sku}}-{{commod|replace:' ,_'}}"
+							class="commod-titulo dados-pa-{{sku|replace:' ,_'}} hidden" 
+							id="{{sku|replace:' ,_'}}-{{commod|replace:' ,_'}}"
 						>
 							{{commod}}
 						</div>
 
 						{% for cc,vv in colunas_somadas_resumo|get_colunas_somadas_resumo:chave%}
-						<div class="coluna-resumo-bomxop-linha dados-pa-{{sku}} hidden">
-							<div>{{cc|safe}}</div>
+						<div class="coluna-resumo-bomxop-linha dados-pa-{{sku|replace:' ,_'}} hidden">
+							<div style="white-space: nowrap; width: fit-content;">{{cc|safe}}</div>
 							<div>{{vv}}</div>
 						</div>
 						{% endfor %}
 					</div>
 
 					{% for cabecalhos, colunas_somadas, rows in commod_val %}
-					<div id="tabela-{{sku}}-{{commod|replace:' ,_'}}" class="tabela-boxmop-linha-div hidden">
+					<div id="tabela-{{sku|replace:' ,_'}}-{{commod|replace:' ,_'}}" class="tabela-boxmop-linha-div hidden">
 						{% include "ghost/BOMxOP/bomxop_tabela.html" %}
 					</div>
 					{% endfor %}
@@ -50,7 +56,7 @@
 				<div 
 					class="commod-titulo-total" 
 					style="font-weight: bold;"
-					id="{{sku}}-TOTAL"
+					id="{{sku|replace:' ,_'}}-TOTAL"
 				>
 					TOTAL
 				</div>

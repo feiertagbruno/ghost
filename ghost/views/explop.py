@@ -4,11 +4,13 @@ from django.contrib import messages
 
 from pandas import read_sql, concat
 from sqlalchemy import text
+from typing import Literal
 
 from ghost.utils.funcs import tratamento_data_referencia, get_engine, get_cabecalhos_e_rows_dataframe, forma_string_para_query
 from ghost.queries import (
 	get_query_ultima_op_por_produto_por_data_de_referencia, get_query_detalhamento_op,
-	get_query_ultima_compra_sem_frete
+	get_query_ultima_compra_sem_frete, get_query_ultima_compra_produtos,
+	get_query_ultimo_fechamento_produtos
 )
 
 def explop(request):
@@ -30,6 +32,8 @@ def explop_post(request):
 		messages.info(request, "Data Inválida")
 		return redirect(reverse("ghost:explop"))
 	
+	qual_custo = request.POST.get("qual-custo")
+	
 	data = tratamento_data_referencia(data)
 	engine = get_engine()
 
@@ -47,7 +51,14 @@ def explop_post(request):
 
 	op = ult_op["op"].iloc[0]
 
-	request, detal_ops = explode_estrutura_pela_op(request, op, engine, data, explodir_pis)
+	request, detal_ops, _ = explode_estrutura_pela_op(
+		request=request, 
+		op=op, 
+		engine=engine, 
+		data=data, 
+		explodir_pis=explodir_pis,
+		qual_custo=qual_custo
+	)
 
 
 	cabecalhos, rows = get_cabecalhos_e_rows_dataframe(df=detal_ops)
@@ -63,7 +74,12 @@ def explop_post(request):
 
 
 
-def explode_estrutura_pela_op(request, op, engine, data, explodir_pis: bool):
+def explode_estrutura_pela_op(
+		request, op, engine, data, explodir_pis: bool,
+		qual_custo: Literal["uesf","uecf","uf"]
+):
+	"""uesf -> Última entrada sem frete | uecf -> Última entrada com frete |
+	uf -> Último Fechamento"""
 
 	query_ult_op = text(get_query_ultima_op_por_produto_por_data_de_referencia())
 	query_detal = text(get_query_detalhamento_op())
@@ -106,18 +122,34 @@ def explode_estrutura_pela_op(request, op, engine, data, explodir_pis: bool):
 		detal_ops = detal_ops.drop(columns=["verificado"])
 	detal_ops = detal_ops.loc[detal_ops["tipo_insumo"] != "PI",:]
 
-	query_ult_compra = text(get_query_ultima_compra_sem_frete())
-	ult_compras = read_sql(query_ult_compra, engine, params={
-		"codigos":forma_string_para_query(detal_ops["insumo"].drop_duplicates()),
-		"data_referencia":data
-	}).drop(columns=["comentario_ultima_compra"])
+	if qual_custo == "uesf":
+		query_ult_compra = text(get_query_ultima_compra_sem_frete())
+		df_custo = read_sql(query_ult_compra, engine, params={
+			"codigos":forma_string_para_query(detal_ops["insumo"].drop_duplicates()),
+			"data_referencia":data
+		}).drop(columns=["comentario_ultima_compra"])
+		coluna_custo = "ult_compra_custo_utilizado"
+	elif qual_custo == "uecf":
+		query_ult_compra = text(get_query_ultima_compra_produtos())
+		df_custo = read_sql(query_ult_compra,engine, params={
+			"codigos":forma_string_para_query(detal_ops["insumo"].drop_duplicates()),
+			"data_referencia":data
+		}).drop(columns=["comentario_ultima_compra"])
+		coluna_custo = "ult_compra_custo_utilizado"
+	elif qual_custo == "uf":
+		query_ult_fechamento = text(get_query_ultimo_fechamento_produtos())
+		df_custo = read_sql(query_ult_fechamento,engine,params={
+			"codigos":forma_string_para_query(detal_ops["insumo"].drop_duplicates()),
+			"data_referencia":data
+		}).drop(columns=["comentario_fechamento"])
+		coluna_custo = "fechamento_custo_utilizado"
 
 	detal_ops = detal_ops.merge(
-		ult_compras,
+		df_custo,
 		how="left",
 		on="insumo"
 	)
 
-	detal_ops["ult_compra_custo_utilizado"] = round(detal_ops["quant_utilizada"] * detal_ops["ult_compra_custo_utilizado"],5)
+	detal_ops[coluna_custo] = round(detal_ops["quant_utilizada"] * detal_ops[coluna_custo],5)
 
-	return request, detal_ops
+	return request, detal_ops, coluna_custo

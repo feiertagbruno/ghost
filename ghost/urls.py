@@ -30,4 +30,5 @@ urlpatterns = [
 	path("ghost/bomxoplinhapost", views.bomxop_linha_do_tempo_post, name="bomxop-linha-do-tempo-post"), #bomxop_linha.py
 	path("ghost/explop", views.explop, name="explop"), # explop.py
 	path("ghost/exploppost", views.explop_post, name="explop-post"), # explop.py
+	path("ghost/relatoriobomxoplinha", views.baixar_relatorio_bomxop_linha, name="baixar-relatorio-bomxop-linha"), #bomxop_linha.py
 ]

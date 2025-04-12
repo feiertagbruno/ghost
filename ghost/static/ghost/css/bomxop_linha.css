@@ -45,6 +45,7 @@
 	width: 20rem;
 	border-bottom: 2px solid dimgray;
 	cursor: pointer;
+	white-space: nowrap;
 }
 
 .sku-div {
@@ -85,4 +86,14 @@
 
 .botao-mais {
 	margin: 0.5rem;
+}
+
+.titulo-bomxop-linha {
+	position: relative;
+}
+
+.form-relatorio-bomxop-linha{
+	position: absolute;
+	right: 0;
+	top: 0;
 }
