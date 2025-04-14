@@ -24,6 +24,7 @@ from ghost.queries import (
 )
 from ghost.utils.funcs import get_engine, get_info_produtos
 from ghost.views.explop import explode_estrutura_pela_op
+from ghost.models import Processamento
 
 def bomxop_linha_do_tempo(request):
 	return render(request, "ghost/BOMxOP/bomxop_linha.html", {"caller":"bomxop_linha"})
@@ -42,6 +43,21 @@ def bomxop_linha_do_tempo_post(request):
 	if len(datas_iniciais_str) == 0 or len(datas_finais_str) == 0:
 		messages.info(request, "Datas Inválidas")
 		return render(request, "ghost/BOMxOP/bomxop_linha.html")
+	
+	################ processamento
+	codigo_identificador = request.POST.get("codigo-identificador","")
+	processamento = Processamento.objects.filter(codigo_identificador = codigo_identificador)
+	if processamento.exists():
+		processamento.delete()
+
+	processamento = Processamento.objects.create(
+		codigo_identificador = codigo_identificador,
+		caller = "bomxop_linha",
+		porcentagem = "0%",
+		mensagem1 = "Processando",
+		mensagem2 = "Preparando informações"
+	)
+	################
 	
 	for data_inicial in datas_iniciais_str:
 		if data_inicial:
@@ -74,6 +90,13 @@ def bomxop_linha_do_tempo_post(request):
 	titulo_budget = "BUDGET25"
 	
 	if traz_budget:
+
+		################ processamento
+		processamento.porcentagem = '1.0%'
+		processamento.mensagem2 = "Buscando budget"
+		processamento.save()
+		################
+		
 		budget = read_csv("bases/budget25.csv",delimiter=";",decimal=",")
 
 		info_prod = get_info_produtos(forma_string_para_query(budget["codigo_original"].drop_duplicates()), engine)
@@ -95,7 +118,13 @@ def bomxop_linha_do_tempo_post(request):
 			budget = budget.rename(columns={"ult_compra_custo_utilizado":"fechamento_custo_utilizado"})
 		#date(2024,10,19)
 
-		
+
+	################ processamento
+	processamento.porcentagem = '2.0%'
+	processamento.mensagem2 = "Buscando OPs do período"
+	processamento.save()
+	################
+
 
 	query_ops = get_query_numeros_op_varios_periodos_somente_PA(datas_iniciais, datas_finais)
 	ops = read_sql(text(query_ops), engine, params={
@@ -116,7 +145,21 @@ def bomxop_linha_do_tempo_post(request):
 
 	detal_ops = DataFrame()
 
+	################ processamento
+	processamento.porcentagem = '3.0%'
+	processamento.mensagem1 = "Obtendo estruturas por OPs"
+	processamento.save()
+	################
+
+	quant_ops = ops.shape[0]
+	
 	for i, row in ops.iterrows():
+
+		################ processamento
+		processamento.mensagem2 = f"{row["produto"]} - {row["descricao"]}"
+		processamento.save()
+		################
+		
 		op = row["op"]
 		data = row["data_encerramento_op"]
 		request, df_op, coluna_custo = explode_estrutura_pela_op(
@@ -125,7 +168,11 @@ def bomxop_linha_do_tempo_post(request):
 			engine=engine, 
 			data=data, 
 			explodir_pis=True,
-			qual_custo=qual_custo
+			qual_custo=qual_custo,
+			processamento_dict={
+				"processamento":processamento,
+				"teto": round((i+1)/quant_ops*87,0)+3
+			}
 		)
 		df_op = df_op.rename(columns={
 			"codigo_original":"codigo_pai",
@@ -140,16 +187,25 @@ def bomxop_linha_do_tempo_post(request):
 		df_op["tipo_original"] = row["tipo"]
 
 		detal_ops = concat([detal_ops,df_op], ignore_index=True)
+
+		################ processamento
+		processamento.porcentagem = f"{round((i+1)/quant_ops*87,0)+3}%"
+		processamento.save()
+		################
+		
 	
 	detal_ops = detal_ops.drop(columns=["quant_total_utilizada"])
-	# premissa não precisa
-	# detal_ops["ult_compra_custo_utilizado"] = round(detal_ops["ult_compra_custo_utilizado"] + (detal_ops["ult_compra_custo_utilizado"] * 0.1),5)
 
 
 	if traz_budget:
 		budget = budget.loc[budget["codigo_original"].isin(ops["produto"]),:]
-		detal_ops = concat([budget,detal_ops])
+		detal_ops = concat([budget,detal_ops]).reset_index()
 
+
+	################ processamento
+	processamento.mensagem2 = f"Separando commodities"
+	processamento.save()
+	################
 
 	detal_ops["commodity"] = detal_ops.apply(commodity,axis=1)
 	
@@ -161,12 +217,27 @@ def bomxop_linha_do_tempo_post(request):
 		nova_col_custo = "ult_fechamento"
 	detal_ops = detal_ops.rename(columns={coluna_custo:nova_col_custo})
 	
+	################ processamento
+	processamento.mensagem1 = "Preparando informações para tela"
+	processamento.save()
+	################
 
 	dicio_tela = {}
 	colunas_somadas_resumo = {}
-	for prod in detal_ops["codigo_original"].drop_duplicates():
+	codigos_originais = list(detal_ops["codigo_original"].drop_duplicates())
+	quantos_codigos = len(codigos_originais)
+	contagem_codigos = 0
+
+	for prod in codigos_originais:
+		
 		descricao_cod_original = detal_ops.loc[detal_ops["codigo_original"] == prod,"descricao_cod_original"].iloc[0]
 		prod_completo = str(prod) + " " + str(descricao_cod_original)
+
+		################ processamento
+		processamento.mensagem2 = f"{prod_completo}"
+		processamento.save()
+		################
+
 		dicio_tela.update({prod_completo:{}})
 		colunas_somadas_resumo.update({prod_completo:{}})
 		soma_por_coluna = {}
@@ -219,6 +290,19 @@ def bomxop_linha_do_tempo_post(request):
 		for key,val in soma_por_coluna.items():
 			colunas_somadas_resumo[prod_completo]["TOTAL"].append((key.split("<br>")[2],round(val,5)))
 
+		################ processamento
+		processamento.porcentagem = f"{round(contagem_codigos/quantos_codigos*8,0)+90}%"
+		contagem_codigos += 1
+		processamento.save()
+		################
+
+
+	################ processamento
+	processamento.porcentagem = "99%"
+	processamento.mensagem1 = "Preparando relatório em excel"
+	processamento.mensagem2 = ""
+	processamento.save()
+	################
 
 	############### RELATORIO EXCEL
 	wb = Workbook()
@@ -363,6 +447,11 @@ def bomxop_linha_do_tempo_post(request):
 	caminho_arquivo = path.join(settings.MEDIA_ROOT,"OP em Linha do Tempo.xlsx")
 	wb.save(caminho_arquivo)
 
+	################ processamento
+	processamento.porcentagem = "100%"
+	processamento.mensagem1 = "Concluído"
+	processamento.save()
+	################
 
 	app = xw.App(visible=False,add_book=False)
 	xwwb = app.books.open(caminho_arquivo)

@@ -13,6 +13,7 @@
 
 	<form action="{% url "ghost:bomxop-linha-do-tempo-post" %}" class="form-bomxop-linha" method="post">
 		{% csrf_token %}
+		<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
 
 		<div class="flex-flow-row ultima-div-data">
 			<label for="data-inicial-1">Data Inicial: </label>

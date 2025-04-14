@@ -76,16 +76,32 @@ def explop_post(request):
 
 def explode_estrutura_pela_op(
 		request, op, engine, data, explodir_pis: bool,
-		qual_custo: Literal["uesf","uecf","uf"]
+		qual_custo: Literal["uesf","uecf","uf"],
+		processamento_dict = None
 ):
 	"""uesf -> Última entrada sem frete | uecf -> Última entrada com frete |
 	uf -> Último Fechamento"""
+
+	################ processamento
+	if processamento_dict:
+		processamento = processamento_dict["processamento"]
+		porcent = float(str(processamento.porcentagem).replace("%",""))
+		teto = processamento_dict["teto"]
+		nivel = 1
+	################
 
 	query_ult_op = text(get_query_ultima_op_por_produto_por_data_de_referencia())
 	query_detal = text(get_query_detalhamento_op())
 
 	detal_op = read_sql(query_detal, engine, params={"numero_op": op})
 	detal_ops = detal_op.copy(deep=True)
+
+	################ processamento
+	# if processamento_dict:
+	# 	processamento.porcentagem = f"{round((teto-porcent)/4*nivel,0)+porcent}%"
+	# 	processamento.save()
+	# 	nivel += 1
+	################
 
 	if explodir_pis:
 		filtro_pis = detal_op.loc[detal_op["tipo_insumo"]=="PI",:]
@@ -114,6 +130,14 @@ def explode_estrutura_pela_op(
 				(detal_ops["verificado"].isna())
 				,:
 			]
+
+			################ processamento
+			if processamento_dict:
+				processamento.porcentagem = f"{round((teto-porcent)/4*nivel,0)+porcent}%"
+				processamento.save()
+				if nivel < 4:
+					nivel += 1
+			################
 			
 			tem_pi = False if filtro_pis.empty else True
 	detal_op = None
@@ -143,6 +167,12 @@ def explode_estrutura_pela_op(
 			"data_referencia":data
 		}).drop(columns=["comentario_fechamento"])
 		coluna_custo = "fechamento_custo_utilizado"
+
+	################ processamento
+	if processamento_dict:
+		processamento.porcentagem = f"{teto}%"
+		processamento.save()
+	################
 
 	detal_ops = detal_ops.merge(
 		df_custo,

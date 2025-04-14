@@ -50,3 +50,14 @@ function add_nova_linha_datas() {
 	}
 
 }
+
+form.onsubmit = () => {
+	mostra_tela_aguarde(
+		getCSRFToken(),
+		gerarCodigoAleatorio(
+			10,
+			document.querySelector("#codigo-identificador-id")
+		),
+		"bomxop_linha"
+	)
+}

@@ -64,7 +64,7 @@
 				{% with sku|add:"|TOTAL" as chave %}
 				{% for cc,vv in colunas_somadas_resumo|get_colunas_somadas_resumo:chave%}
 				<div class="coluna-resumo-total">
-					<div style="font-weight: bold;">{{cc|safe}}</div>
+					<div style="font-weight: bold; white-space: nowrap;">{{cc|safe}}</div>
 					<div style="font-weight: bold;">{{vv}}</div>
 				</div>
 				{% endfor %}
