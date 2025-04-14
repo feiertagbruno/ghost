@@ -12,6 +12,8 @@
 	{% if caller == "explop" %}
 	<form class="form-explop" action="{% url "ghost:explop-post" %}" method="post">
 		{% csrf_token %}
+		<input type="hidden" name="codigo-identificador" id="codigo-identificador-id">
+		
 		<div class="flex-flow-row">
 			<label for="codigo-id">Código: </label>
 			<input type="text" name="codigo" id="codigo-id" maxlength="15">

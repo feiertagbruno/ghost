@@ -156,7 +156,7 @@ def bomxop_linha_do_tempo_post(request):
 	for i, row in ops.iterrows():
 
 		################ processamento
-		processamento.mensagem2 = f"{row["produto"]} - {row["descricao"]}"
+		processamento.mensagem2 = f"{row['produto']} - {row['descricao']}"
 		processamento.save()
 		################
 		
@@ -447,12 +447,6 @@ def bomxop_linha_do_tempo_post(request):
 	caminho_arquivo = path.join(settings.MEDIA_ROOT,"OP em Linha do Tempo.xlsx")
 	wb.save(caminho_arquivo)
 
-	################ processamento
-	processamento.porcentagem = "100%"
-	processamento.mensagem1 = "Concluído"
-	processamento.save()
-	################
-
 	app = xw.App(visible=False,add_book=False)
 	xwwb = app.books.open(caminho_arquivo)
 	xwws = xwwb.sheets("Relatório")
@@ -461,6 +455,12 @@ def bomxop_linha_do_tempo_post(request):
 	xwwb.save()
 	xwwb.close()
 	app.quit()
+
+	################ processamento
+	processamento.porcentagem = "100%"
+	processamento.mensagem1 = "Concluído"
+	processamento.save()
+	################
 
 	context = {
 		"caller": "bomxop_linha_post",

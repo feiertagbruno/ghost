@@ -12,6 +12,7 @@ from ghost.queries import (
 	get_query_ultima_compra_sem_frete, get_query_ultima_compra_produtos,
 	get_query_ultimo_fechamento_produtos
 )
+from ghost.models import Processamento
 
 def explop(request):
 	return render(request, "ghost/explop/explop.html", {"caller": "explop"})
@@ -83,11 +84,25 @@ def explode_estrutura_pela_op(
 	uf -> Último Fechamento"""
 
 	################ processamento
-	if processamento_dict:
+	nivel = 1
+	qn = 2
+	if processamento_dict: # bomxop_linha
 		processamento = processamento_dict["processamento"]
 		porcent = float(str(processamento.porcentagem).replace("%",""))
 		teto = processamento_dict["teto"]
-		nivel = 1
+	else: # explop
+		codigo_identificador = request.POST.get("codigo-identificador")
+		processamento = Processamento.objects.filter(codigo_identificador=codigo_identificador)
+		if processamento.exists():
+			processamento.delete()
+
+		processamento = Processamento.objects.create(
+			codigo_identificador = codigo_identificador,
+			caller = "explop",
+			porcentagem = "",
+			mensagem1 = "Processando",
+			mensagem2 = ""
+		)
 	################
 
 	query_ult_op = text(get_query_ultima_op_por_produto_por_data_de_referencia())
@@ -96,19 +111,23 @@ def explode_estrutura_pela_op(
 	detal_op = read_sql(query_detal, engine, params={"numero_op": op})
 	detal_ops = detal_op.copy(deep=True)
 
-	################ processamento
-	# if processamento_dict:
-	# 	processamento.porcentagem = f"{round((teto-porcent)/4*nivel,0)+porcent}%"
-	# 	processamento.save()
-	# 	nivel += 1
-	################
-
 	if explodir_pis:
 		filtro_pis = detal_op.loc[detal_op["tipo_insumo"]=="PI",:]
 		tem_pi = False if filtro_pis.empty else True
 
 		while tem_pi:
+			quant_pis = filtro_pis.shape[0]
+			contagem = 0
 			for i, row in filtro_pis.iterrows():
+
+				################ processamento explop
+				if not processamento_dict:
+					contagem += 1
+					if processamento.porcentagem != "100.0%":
+						processamento.porcentagem = f"{round((contagem)/quant_pis*100/qn+(100/qn*(nivel-1)),0)}%"
+						processamento.save()
+				################
+				
 				cod_pi = row["insumo"]
 				quant = row["quant_utilizada"]
 				data_referencia = tratamento_data_referencia(row["data_encerramento_op"])
@@ -133,10 +152,10 @@ def explode_estrutura_pela_op(
 
 			################ processamento
 			if processamento_dict:
-				processamento.porcentagem = f"{round((teto-porcent)/4*nivel,0)+porcent}%"
+				processamento.porcentagem = f"{round((teto-porcent)/qn*nivel,0)+porcent}%"
 				processamento.save()
-				if nivel < 4:
-					nivel += 1
+			if nivel < qn:
+				nivel += 1
 			################
 			
 			tem_pi = False if filtro_pis.empty else True
@@ -171,6 +190,9 @@ def explode_estrutura_pela_op(
 	################ processamento
 	if processamento_dict:
 		processamento.porcentagem = f"{teto}%"
+		processamento.save()
+	else:
+		processamento.porcentagem = f"100%"
 		processamento.save()
 	################
 
