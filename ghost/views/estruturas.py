@@ -801,6 +801,8 @@ def gerar_multiestruturas(
 		compilado_custos_totais = compilado_custos_totais.reset_index(drop=True)
 	compilado_estruturas = compilado_estruturas.reset_index(drop=True)
 
+	processamento.delete()
+
 	return [request, compilado_estruturas, compilado_custos_totais]
 
 

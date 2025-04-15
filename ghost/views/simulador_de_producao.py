@@ -1775,7 +1775,7 @@ def relatorio_phaseout_por_produto(request):
 
 			index += 1
 			################ processamento
-			processamento.porcentagem = f'{int((index+1)/len(mesclagem)*porcent)+20}%'
+			processamento.porcentagem = f'{int((index+1)/len(mesclagem)*79)+20}%'
 			processamento.save()
 			################
 			
@@ -1783,14 +1783,12 @@ def relatorio_phaseout_por_produto(request):
 			xwws.range(mescla).api.VerticalAlignment = -4108
 			xwws.range(mescla).api.HorizontalAlignment = constants.xlCenter
 		
-		xwws.range(f"{gcl(prim_col)}:{gcl(col - 1)}").autofit()
-
 		################ processamento
-		processamento.porcentagem = '100%'
-		processamento.mensagem1 = 'Concluído'
-		processamento.mensagem2 = ''
+		processamento.mensagem2 = "Finalizando"
 		processamento.save()
 		################
+		
+		xwws.range(f"{gcl(prim_col)}:{gcl(col - 1)}").autofit()
 		
 		xwwb.save()
 		xwwb.close()
@@ -1803,4 +1801,15 @@ def relatorio_phaseout_por_produto(request):
 			content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 		)
 		response["Content-Disposition"] = f'attachment; filename="{codigo_aleatorio}.xlsx"'
+	
+	processamento.delete()
+
+
+	################ processamento
+	processamento.porcentagem = '100%'
+	processamento.mensagem1 = 'Concluído'
+	processamento.mensagem2 = ''
+	processamento.save()
+	################
+
 	return response

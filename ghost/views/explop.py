@@ -5,6 +5,7 @@ from django.contrib import messages
 from pandas import read_sql, concat
 from sqlalchemy import text
 from typing import Literal
+from time import sleep
 
 from ghost.utils.funcs import tratamento_data_referencia, get_engine, get_cabecalhos_e_rows_dataframe, forma_string_para_query
 from ghost.queries import (
@@ -194,6 +195,8 @@ def explode_estrutura_pela_op(
 	else:
 		processamento.porcentagem = f"100%"
 		processamento.save()
+		sleep(0.6)
+		processamento.delete()
 	################
 
 	detal_ops = detal_ops.merge(

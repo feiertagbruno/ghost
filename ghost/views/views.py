@@ -241,8 +241,7 @@ def extrai_bomxop_por_periodo(request, data_inicial, data_final,considera_frete=
 	}
 
 	################ processamento
-	processamento.finalizado = True
-	processamento.save()
+	processamento.delete()
 	################
 
 	return render(request,"ghost/BOMxOP/bomxop_post.html", context)

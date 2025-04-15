@@ -14,6 +14,7 @@ from openpyxl.styles import Font,Border,Side,Color
 from openpyxl.comments import Comment
 from os import path
 import xlwings as xw
+from time import sleep
 
 from ghost.utils.funcs import (
 	tratamento_data_referencia, forma_string_para_query, get_cabecalhos_e_rows_dataframe,
@@ -460,6 +461,8 @@ def bomxop_linha_do_tempo_post(request):
 	processamento.porcentagem = "100%"
 	processamento.mensagem1 = "Concluído"
 	processamento.save()
+	sleep(0.6)
+	processamento.delete()
 	################
 
 	context = {
